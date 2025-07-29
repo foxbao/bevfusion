@@ -16,17 +16,9 @@ from mmdet3d.datasets import build_dataset
 from mmdet3d.models import build_model
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
 
-import sys
-# sys.argv = ['tools/train.py', 'configs/nuscenes/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml',
-#             '--run-dir', 'Res/test_mini'
-# ]
-# sys.argv = ['tools/train.py', 'configs/once/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml',
-#             '--run-dir', 'Res/test_once_mini'
-# ]
 
-#python tools/train.py configs/once/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml --run-dir Res/test_once_mini_6cam
 def main():
-    # dist.init()
+    dist.init()
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config", metavar="FILE", help="config file")
@@ -39,7 +31,7 @@ def main():
     cfg = Config(recursive_eval(configs), filename=args.config)
 
     torch.backends.cudnn.benchmark = cfg.cudnn_benchmark
-    torch.cuda.set_device(0)
+    torch.cuda.set_device(dist.local_rank())
 
     if args.run_dir is None:
         args.run_dir = auto_set_run_dir()
@@ -73,7 +65,7 @@ def main():
 
     datasets = [build_dataset(cfg.data.train)]
 
-    model = build_model(cfg.model,)
+    model = build_model(cfg.model)
     model.init_weights()
     if cfg.get("sync_bn", None):
         if not isinstance(cfg["sync_bn"], dict):
@@ -85,7 +77,7 @@ def main():
         model,
         datasets,
         cfg,
-        distributed=False,
+        distributed=True,
         validate=True,
         timestamp=timestamp,
     )
@@ -93,4 +85,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

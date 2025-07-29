@@ -49,6 +49,9 @@ def nuscenes_data_prep(
         f"{out_dir}/{info_prefix}_infos_train.pkl",
         load_augmented=load_augmented,
     )
+    
+def kl_data_prep():
+    aaaaa=1
 
 
 parser = argparse.ArgumentParser(description="Data converter arg parser")
@@ -107,16 +110,16 @@ if __name__ == "__main__":
             max_sweeps=args.max_sweeps,
             load_augmented=load_augmented,
         )
-        test_version = f"{args.version}-test"
-        nuscenes_data_prep(
-            root_path=args.root_path,
-            info_prefix=args.extra_tag,
-            version=test_version,
-            dataset_name="NuScenesDataset",
-            out_dir=args.out_dir,
-            max_sweeps=args.max_sweeps,
-            load_augmented=load_augmented,
-        )
+        # test_version = f"{args.version}-test"
+        # nuscenes_data_prep(
+        #     root_path=args.root_path,
+        #     info_prefix=args.extra_tag,
+        #     version=test_version,
+        #     dataset_name="NuScenesDataset",
+        #     out_dir=args.out_dir,
+        #     max_sweeps=args.max_sweeps,
+        #     load_augmented=load_augmented,
+        # )
     elif args.dataset == "nuscenes" and args.version == "v1.0-mini":
         train_version = f"{args.version}"
         nuscenes_data_prep(
@@ -128,3 +131,15 @@ if __name__ == "__main__":
             max_sweeps=args.max_sweeps,
             load_augmented=load_augmented,
         )
+        
+    elif args.dataset=="kl_dataset" and args.version=="v1.0-train":
+        train_version = f"{args.version}"
+        # nuscenes_data_prep(
+        #     root_path=args.root_path,
+        #     info_prefix=args.extra_tag,
+        #     version=train_version,
+        #     dataset_name="NuScenesDataset",
+        #     out_dir=args.out_dir,
+        #     max_sweeps=args.max_sweeps,
+        #     load_augmented=load_augmented,
+        # )
