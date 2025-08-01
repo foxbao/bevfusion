@@ -3,6 +3,9 @@ import argparse
 from data_converter import nuscenes_converter as nuscenes_converter
 from data_converter.create_gt_database import create_groundtruth_database
 
+from data_converter import kl_converter as kl_converter
+
+from mmdet3d.datasets.kl_dataset import KLDataset
 
 def nuscenes_data_prep(
     root_path,
@@ -50,8 +53,61 @@ def nuscenes_data_prep(
         load_augmented=load_augmented,
     )
     
-def kl_data_prep():
-    aaaaa=1
+def kl_data_prep(    
+    root_path,
+    info_prefix,
+    version,
+    dataset_name,
+    out_dir,
+    max_sweeps=10,
+    load_augmented=None,):
+    """Prepare data related to nuScenes dataset.
+
+    Related data consists of '.pkl' files recording basic infos,
+    2D annotations and groundtruth database.
+
+    Args:
+        root_path (str): Path of dataset root.
+        info_prefix (str): The prefix of info filenames.
+        version (str): Dataset version.
+        dataset_name (str): The dataset class name.
+        out_dir (str): Output directory of the groundtruth database info.
+        max_sweeps (int): Number of input consecutive frames. Default: 10
+    """
+    
+    if load_augmented is None:
+        from pathlib import Path
+        ROOT_DIR = (Path(__file__).resolve().parent / '../').resolve()
+        
+        data_path = Path(root_path) 
+        last_two_parts = data_path.parts[-2:]   # 取最后两部分，如 ('data', 'kl')
+        folder=last_two_parts[0]
+        name=last_two_parts[1]
+        
+        kl_converter.create_kl_infos(
+            version=version,
+            data_path=ROOT_DIR / folder / name,
+            save_path=ROOT_DIR /folder / name,
+            with_cam=False)
+        
+        # kl_dataset = KLDataset(
+        #     dataset_cfg=dataset_cfg, class_names=None,
+        #     root_path=ROOT_DIR / folder / name,
+        #     logger=common_utils.create_logger(), training=True
+        # )
+
+        # nuscenes_converter.create_nuscenes_infos(
+        #     root_path, info_prefix, version=version, max_sweeps=max_sweeps
+        # )
+    create_groundtruth_database(
+        dataset_class_name=dataset_name,
+        data_path=ROOT_DIR / folder / name,
+        info_prefix=info_prefix,
+        info_path=f"{out_dir}/{info_prefix}_infos_train.pkl",
+        load_augmented=load_augmented,
+    )
+        
+    aaaa=1
 
 
 parser = argparse.ArgumentParser(description="Data converter arg parser")
@@ -132,14 +188,14 @@ if __name__ == "__main__":
             load_augmented=load_augmented,
         )
         
-    elif args.dataset=="kl_dataset" and args.version=="v1.0-train":
-        train_version = f"{args.version}"
-        # nuscenes_data_prep(
-        #     root_path=args.root_path,
-        #     info_prefix=args.extra_tag,
-        #     version=train_version,
-        #     dataset_name="NuScenesDataset",
-        #     out_dir=args.out_dir,
-        #     max_sweeps=args.max_sweeps,
-        #     load_augmented=load_augmented,
-        # )
+    elif args.dataset=="kl":
+        train_version = f"{args.version}-trainval"
+        kl_data_prep(
+            root_path=args.root_path,
+            info_prefix=args.extra_tag,
+            version=train_version,
+            dataset_name="KLDataset",
+            out_dir=args.out_dir,
+            max_sweeps=args.max_sweeps,
+            load_augmented=load_augmented,
+        )

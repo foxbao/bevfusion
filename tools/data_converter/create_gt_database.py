@@ -174,6 +174,56 @@ def create_groundtruth_database(
                 ),
             ],
         )
+    elif dataset_class_name == "KLDataset":
+        dataset_cfg.update(
+            test_mode=False,
+            # split="training",
+            modality=dict(
+                use_lidar=True,
+                use_depth=False,
+                use_lidar_intensity=True,
+                use_camera=with_mask,
+            ),
+            pipeline=[
+                dict(
+                    type="LoadPointsFromFile",
+                    coord_type="LIDAR",
+                    load_dim=4,
+                    use_dim=4,
+                ),
+                dict(
+                    type="LoadAnnotations3D",
+                    with_bbox_3d=True,
+                    with_label_3d=True,
+                ),
+            ],
+            custom_cfg=dict(  # ✅ 把你的特别参数放进一个子字典
+                INTENSITY_FILTER=dict(
+                    ENABLED=True,
+                    THRESHOLD=5.0,
+                ),
+                POINT_FILTER=dict(
+                    ENABLED=True,
+                    FILTER_MIN_POINTS_BY_CLASS={
+                        "Pedestrian": 5,
+                        "Car": 10,
+                        "IGV-Full": 10,
+                        "Truck": 10,
+                        "Trailer-Empty": 10,
+                        "Trailer-Full": 10,
+                        "IGV-Empty": 10,
+                        "Crane": 20,
+                        "OtherVehicle": 5,
+                        "Cone": 5,
+                        "ContainerForklift": 10,
+                        "Forklift": 10,
+                        "Lorry": 10,
+                        "ConstructionVehicle": 5,
+                        "WheelCrane": 30
+                    }
+                ),
+            ),
+        )
 
     elif dataset_class_name == "NuScenesDataset":
         if not load_augmented:
