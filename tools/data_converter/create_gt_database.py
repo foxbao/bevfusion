@@ -186,7 +186,7 @@ def create_groundtruth_database(
             ),
             pipeline=[
                 dict(
-                    type="LoadPointsFromFile",
+                    type="LoadPointsFromMultipleFiles",
                     coord_type="LIDAR",
                     load_dim=4,
                     use_dim=4,

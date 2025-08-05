@@ -13,7 +13,7 @@ from mmdet.datasets.builder import PIPELINES
 from mmdet.datasets.pipelines import LoadAnnotations
 
 from .loading_utils import load_augmented_point_cloud, reduce_LiDAR_beams
-
+from scipy.spatial.transform import Rotation as R
 
 @PIPELINES.register_module()
 class LoadMultiViewImageFromFiles:
@@ -308,6 +308,243 @@ class LoadBEVSegmentation:
         return data
 
 
+
+
+from pathlib import Path
+def read_pcd_with_intensity(pcd_path):
+    # 读取文件头
+    with open(pcd_path, 'rb') as f:
+        header = []
+        while True:
+            line = f.readline().decode('utf-8').strip()
+            header.append(line)
+            if line.startswith('DATA'):
+                break
+
+    # 解析字段、类型、大小
+    fields, size, type_ = None, None, None
+    for line in header:
+        if line.startswith('FIELDS'):
+            fields = line.split()[1:]
+        elif line.startswith('SIZE'):
+            size = list(map(int, line.split()[1:]))
+        elif line.startswith('TYPE'):
+            type_ = line.split()[1:]
+
+    if fields is None or size is None or type_ is None:
+        raise ValueError("Invalid PCD header: missing FIELDS/SIZE/TYPE")
+
+    if not len(fields) == len(size) == len(type_):
+        raise ValueError("FIELDS/SIZE/TYPE length mismatch")
+
+    # 构建 dtype：根据 TYPE 和 SIZE 推断
+    def get_numpy_dtype(t, s):
+        if t == 'F':
+            if s == 4:
+                return np.float32
+            elif s == 8:
+                return np.float64
+        elif t == 'U':
+            if s == 1:
+                return np.uint8
+            elif s == 2:
+                return np.uint16
+            elif s == 4:
+                return np.uint32
+        elif t == 'I':
+            if s == 1:
+                return np.int8
+            elif s == 2:
+                return np.int16
+            elif s == 4:
+                return np.int32
+        raise ValueError(f"Unsupported TYPE/SIZE combination: TYPE={t}, SIZE={s}")
+
+    dtype = np.dtype([(f, get_numpy_dtype(t, s)) for f, t, s in zip(fields, type_, size)])
+
+    # 计算数据起始位置
+    data_offset = len('\n'.join(header)) + 1
+    data = np.fromfile(pcd_path, dtype=dtype, offset=data_offset)
+
+    # 检查字段存在
+    required = {'x', 'y', 'z', 'intensity', 'ring'}
+    if not required.issubset(data.dtype.names):
+        raise ValueError(f"Missing required fields. Expected at least: {required}")
+
+    # 构造输出数据（自动判断是否含有 timestamp_2us）
+    base_fields = ['x', 'y', 'z', 'intensity', 'ring']
+    base_fields = ['x', 'y', 'z', 'intensity']
+    arrs = [data[f].astype(np.float32) for f in base_fields]
+
+    # if 'timestamp_2us' in data.dtype.names:
+    #     arrs.append(data['timestamp_2us'].astype(np.float32))
+
+    all_data = np.vstack(arrs).T
+
+    # 过滤含 NaN 的点
+    valid_mask = ~np.isnan(all_data).any(axis=1)
+    return all_data[valid_mask]
+
+
+def read_pc(pc_file, verbose=False):
+    """
+    读取点云（支持.bin/.pcd），自动过滤NaN/Inf
+    
+    Args:
+        pc_file: 文件路径（Path对象或字符串）
+        verbose: 是否打印调试信息
+        
+    Returns:
+        np.ndarray: (N, 4)的合法点云数据 [x, y, z, intensity]
+    """
+    pc_file = Path(pc_file)
+    if not pc_file.exists():
+        raise FileNotFoundError(f"Point cloud file not found: {pc_file}")
+
+    try:
+        if pc_file.suffix == '.bin':
+            dtype = np.dtype([
+                ('x', np.float32), ('y', np.float32), ('z', np.float32),
+                ('intensity', np.float32), ('ring', np.float32),  # 根据实际格式调整
+                ('timestamp_2us', np.float32)
+            ])
+            data = np.fromfile(pc_file, dtype=dtype)
+            points = np.vstack((data['x'], data['y'], data['z'], data['intensity'])).T
+            
+        elif pc_file.suffix == '.pcd':
+            points = read_pcd_with_intensity(pc_file)
+            
+        else:
+            raise ValueError(f"Unsupported file format: {pc_file.suffix}")
+
+        # 二次检查（防止上游未处理的情况）
+        valid_mask = np.isfinite(points).all(axis=1)
+        if np.any(~valid_mask):
+            points = points[valid_mask]
+            if verbose:
+                print(f"Secondary filtering: Removed {np.sum(~valid_mask)} invalid points")
+
+        # 空数据检查
+        if len(points) == 0:
+            raise ValueError(f"Empty point cloud after filtering: {pc_file}")
+
+        points = points[np.max(np.abs(points[:, :3]), axis=1) < 1e3]  # 保留合理值,防止数值溢出
+        return points
+
+    except Exception as e:
+        raise RuntimeError(f"Error reading {pc_file}: {str(e)}")
+
+
+
+@PIPELINES.register_module()
+class LoadPointsFromMultipleFiles:
+    """Load Points From Multiple Files.
+    Load point cloud data from multiple files, and merge them into one point cloud.
+    Maily used for kl_dataset
+    Args:
+
+        
+    """
+    def __init__(
+        self,
+        coord_type,
+        load_dim=6,
+        use_dim=[0, 1, 2],
+        shift_height=False,
+        use_color=False,
+        load_augmented=None,
+        reduce_beams=None,
+        use_intensity_filter=False,
+        intensity_threshold=5):
+        # self.file_list = file_list
+        self.use_intensity_filter=use_intensity_filter
+        self.intensity_threshold=intensity_threshold
+        
+        
+    def _load_points(self, lidar_path):
+        aaaaa=1
+
+    def transform_points(self,point_cloud, extrinsic):
+        # 提取平移向量
+        translation = np.array(extrinsic[:3])  # [Tx, Ty, Tz]
+
+        # 提取四元数
+        quaternion = np.array(extrinsic[3:])  # [qx, qy, qz, qw]
+        rotation_matrix = R.from_quat(quaternion).as_matrix()
+        positions = point_cloud[:, :3]
+        rotated_positions = np.dot(positions, rotation_matrix.T)
+        transformed_positions = rotated_positions + translation
+        point_cloud[:, :3] = transformed_positions
+        return point_cloud
+    
+    
+
+    def get_merged_lidar(self,results:dict,use_extrinsic:bool=True)->np.ndarray:
+        
+        point_clouds = []
+        # info = self.infos[index]
+        # lidar_names=['helios_front_left','helios_rear_right']
+        # lidar_extrinsic_names=['Tx_baselink_lidar_helios_front_left','Tx_baselink_lidar_helios_rear_right']
+
+        extrinsic_names={}
+        extrinsic_names['helios_front_left']='Tx_baselink_lidar_helios_front_left'
+        extrinsic_names['helios_rear_right']='Tx_baselink_lidar_helios_rear_right'
+        extrinsic_names['bp_front_left']='Tx_baselink_lidar_bp_front_left' # 向下补盲
+        # extrinsic_names['bp_front_right']='Tx_baselink_lidar_bp_front_right' #向上补盲
+        # extrinsic_names['bp_rear_left']='Tx_baselink_lidar_bp_rear_left' #向上补盲
+        extrinsic_names['bp_rear_right']='Tx_baselink_lidar_bp_rear_right' #向下补盲
+        
+        # lidar_configurations=[]
+        # lidar_configurations.append({"lidar_name": "helios_front_left","lidar_extrinsic_name": "Tx_baselink_lidar_helios_front_left"})
+        # lidar_configurations.append({"lidar_name": "helios_rear_right","lidar_extrinsic_name": "Tx_baselink_lidar_helios_rear_right"})
+        
+        for lidar_name, lidar_extrinsic_name in extrinsic_names.items():
+            lidar_path = results['lidars'][lidar_name]
+            points=read_pc(lidar_path)
+            
+            # ⭐ 如果开启强度过滤
+            if self.use_intensity_filter:
+                intensity = points[:, 3]
+                mask = intensity >= self.intensity_threshold
+                points = points[mask]
+            # times = np.zeros((points.shape[0], 1))
+            # points = np.concatenate((points, times), axis=1)
+            if use_extrinsic:
+                lidar_extrinsic=results['sensor_extrinsics'][lidar_extrinsic_name]
+                points=self.transform_points(points, lidar_extrinsic)
+            point_clouds.append(points)
+                
+        if point_clouds:  # 如果列表不为空
+            merged_point_cloud = np.concatenate(point_clouds, axis=0)
+        else:
+            merged_point_cloud = np.empty((0, 4))  # 假设点云是 N x 4 的格式
+        # import open3d as o3d
+        # pcd = o3d.geometry.PointCloud()
+        # pcd.points = o3d.utility.Vector3dVector(merged_point_cloud[:, :3])
+        # o3d.io.write_point_cloud("output_with_intensity.pcd", pcd, write_ascii=True)
+        return merged_point_cloud
+
+
+
+    def __call__(self, results):
+        """Call function to load points data from file.
+
+        Args:
+            results (dict): Result dict containing point clouds data.
+
+        Returns:
+            dict: The result dict containing the point clouds data. \
+                Added key and value are described below.
+
+                - points (:obj:`BasePoints`): Point clouds data.
+        """
+        
+
+        points=self.get_merged_lidar(results)
+        results["points"] = points
+        return results
+
+
 @PIPELINES.register_module()
 class LoadPointsFromFile:
     """Load Points From File.
@@ -353,6 +590,8 @@ class LoadPointsFromFile:
         self.use_dim = use_dim
         self.load_augmented = load_augmented
         self.reduce_beams = reduce_beams
+        
+
 
     def _load_points(self, lidar_path):
         """Private function to load point clouds data.

@@ -302,66 +302,7 @@ class KLDataset(Custom3DDataset):
         # o3d.io.write_point_cloud("output_with_intensity.pcd", pcd, write_ascii=True)
         return merged_point_cloud
             
-    def get_data_info(self, index: int) -> Dict[str, Any]:
-        # if self._merge_all_iters_to_one_epoch:
-        #     index = index % len(self.infos)
-        
-        info = copy.deepcopy(self.infos[index])
 
-        points=self.get_merged_lidar(index,True)
-        # check_nan_inf(points)
-        input_dict = {
-            'points': points,
-            'frame_id': Path(info['lidars']['helios_front_left']).stem,
-            'metadata': {'token': info['token']}
-        }
-
-        if 'annos' in info:
-            annos = info['annos']
-            gt_names = annos['name']
-            gt_boxes_lidar = annos['gt_boxes_lidar']
-            gt_num_lidar_pts=annos['num_lidar_pts']
-            
-            # ⭐ 点数过滤逻辑开始 ⭐
-            if getattr(self, 'filter_gt_by_points', False):
-                keep_mask = np.ones(len(gt_names), dtype=bool)
-                for i in range(len(gt_names)):
-                    cls = gt_names[i]
-                    min_pts = self.class_min_points_dict.get(cls, 0)
-                    if gt_num_lidar_pts[i] < min_pts:
-                        keep_mask[i] = False
-
-                gt_names = gt_names[keep_mask]
-                gt_boxes_lidar = gt_boxes_lidar[keep_mask]
-                gt_num_lidar_pts = gt_num_lidar_pts[keep_mask]
-            # ⭐ 点数过滤逻辑结束 ⭐
-
-            input_dict.update({
-                'gt_names': gt_names,
-                'gt_boxes': gt_boxes_lidar
-                # 'gt_num_lidar_pts':gt_num_lidar_pts
-            })
-
-        if self.use_camera:
-            input_dict = self.load_camera_info(input_dict, info)
-
-        data_dict = self.prepare_data(data_dict=input_dict)
-
-        if self.dataset_cfg.get('SET_NAN_VELOCITY_TO_ZEROS', False) and 'gt_boxes' in info:
-            gt_boxes = data_dict['gt_boxes']
-            gt_boxes[np.isnan(gt_boxes)] = 0
-            data_dict['gt_boxes'] = gt_boxes
-
-        # if not self.dataset_cfg.PRED_VELOCITY and 'gt_boxes' in data_dict:
-        #     data_dict['gt_boxes'] = data_dict['gt_boxes'][:, [0, 1, 2, 3, 4, 5, 6, -1]]
-        data_dict['timestamp']=info['timestamp']
-        helios_front_left_path=info['lidars']['helios_front_left']
-        parts = helios_front_left_path.split('/')
-        sample_index = parts.index('sample')
-        folder = '/'.join(parts[sample_index+1:sample_index+3])
-        data_dict['folder']=folder
-
-        return data_dict
             
     def load_annotations(self, ann_file):
         """Load annotations from ann_file.
@@ -380,3 +321,98 @@ class KLDataset(Custom3DDataset):
         # self.metadata = data["metadata"]
         # self.version = self.metadata["version"]
         return data_infos
+    
+    
+    def get_data_info(self, index: int) -> Dict[str, Any]:
+        
+        info = copy.deepcopy(self.infos[index])
+        data = dict(
+            token=info["token"],
+            sample_idx=info['token'],
+            lidars=info["lidars"],
+            # sweeps=info["sweeps"],
+            timestamp=info["timestamp"],
+            localization=info["localization"],
+            sensor_extrinsics=info["sensor_extrinsics"],
+        )
+        
+        if self.modality["use_camera"]:
+            data["image_paths"] = []
+            data["lidar2camera"] = []
+            data["lidar2image"] = []
+            data["camera2ego"] = []
+            data["camera_intrinsics"] = []
+            data["camera2lidar"] = []
+        # if self._merge_all_iters_to_one_epoch:
+        #     index = index % len(self.infos)
+        
+        # info = copy.deepcopy(self.infos[index])
+
+        # points=self.get_merged_lidar(index,True)
+        # # check_nan_inf(points)
+        # input_dict = {
+        #     'points': points,
+        #     'frame_id': Path(info['lidars']['helios_front_left']).stem,
+        #     'metadata': {'token': info['token']}
+        # }
+
+        # if 'annos' in info:
+        #     annos = info['annos']
+        #     gt_names = annos['name']
+        #     gt_boxes_lidar = annos['gt_boxes_lidar']
+        #     gt_num_lidar_pts=annos['num_lidar_pts']
+            
+        #     # ⭐ 点数过滤逻辑开始 ⭐
+        #     if getattr(self, 'filter_gt_by_points', False):
+        #         keep_mask = np.ones(len(gt_names), dtype=bool)
+        #         for i in range(len(gt_names)):
+        #             cls = gt_names[i]
+        #             min_pts = self.class_min_points_dict.get(cls, 0)
+        #             if gt_num_lidar_pts[i] < min_pts:
+        #                 keep_mask[i] = False
+
+        #         gt_names = gt_names[keep_mask]
+        #         gt_boxes_lidar = gt_boxes_lidar[keep_mask]
+        #         gt_num_lidar_pts = gt_num_lidar_pts[keep_mask]
+        #     # ⭐ 点数过滤逻辑结束 ⭐
+
+        #     input_dict.update({
+        #         'gt_names': gt_names,
+        #         'gt_boxes': gt_boxes_lidar
+        #         # 'gt_num_lidar_pts':gt_num_lidar_pts
+        #     })
+
+        # if self.use_camera:
+        #     input_dict = self.load_camera_info(input_dict, info)
+
+        # # data_dict = self.prepare_data(data_dict=input_dict)
+        # data_dict=input_dict
+        
+        # if 'gt_boxes' in info:
+        #     gt_boxes = data_dict['gt_boxes']
+        #     gt_boxes[np.isnan(gt_boxes)] = 0
+        #     data_dict['gt_boxes'] = gt_boxes
+        
+        
+        # if self.dataset_cfg.get('SET_NAN_VELOCITY_TO_ZEROS', False) and 'gt_boxes' in info:
+        #     gt_boxes = data_dict['gt_boxes']
+        #     gt_boxes[np.isnan(gt_boxes)] = 0
+        #     data_dict['gt_boxes'] = gt_boxes
+
+        # # if not self.dataset_cfg.PRED_VELOCITY and 'gt_boxes' in data_dict:
+        # #     data_dict['gt_boxes'] = data_dict['gt_boxes'][:, [0, 1, 2, 3, 4, 5, 6, -1]]
+        # data_dict['timestamp']=info['timestamp']
+        # helios_front_left_path=info['lidars']['helios_front_left']
+        # parts = helios_front_left_path.split('/')
+        # sample_index = parts.index('sample')
+        # folder = '/'.join(parts[sample_index+1:sample_index+3])
+        # data_dict['folder']=folder
+        
+        annos = self.get_ann_info(index)
+        data["ann_info"] = annos
+
+        return data
+    
+    def get_ann_info(self, index):
+        annos = self.infos[index]["annos"]
+        return annos
