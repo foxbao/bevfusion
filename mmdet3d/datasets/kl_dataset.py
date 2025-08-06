@@ -208,7 +208,7 @@ class KLDataset(Custom3DDataset):
         object_classes=None,
         map_classes=None,
         load_interval=1,
-        with_velocity=True,
+        with_velocity=False,
         modality=None,
         box_type_3d="LiDAR",
         filter_empty_gt=True,
@@ -302,7 +302,29 @@ class KLDataset(Custom3DDataset):
         # o3d.io.write_point_cloud("output_with_intensity.pcd", pcd, write_ascii=True)
         return merged_point_cloud
             
+    def get_cat_ids(self, idx):
+        """Get category distribution of single scene.
 
+        Args:
+            idx (int): Index of the data_info.
+
+        Returns:
+            dict[list]: for each category, if the current scene
+                contains such boxes, store a list containing idx,
+                otherwise, store empty list.
+        """
+        info = self.data_infos[idx]
+        if self.use_valid_flag:
+            mask = info["valid_flag"]
+            gt_names = set(info["gt_names"][mask])
+        else:
+            gt_names = set(info["gt_names"])
+
+        cat_ids = []
+        for name in gt_names:
+            if name in self.CLASSES:
+                cat_ids.append(self.cat2id[name])
+        return cat_ids
             
     def load_annotations(self, ann_file):
         """Load annotations from ann_file.
@@ -414,5 +436,40 @@ class KLDataset(Custom3DDataset):
         return data
     
     def get_ann_info(self, index):
-        annos = self.infos[index]["annos"]
-        return annos
+        
+        
+        info = self.data_infos[index]
+        
+        if self.use_valid_flag:
+            mask = info["valid_flag"]
+        else:
+            mask = info["num_lidar_pts"] > 0
+        gt_bboxes_3d = info["gt_boxes"][mask]
+        gt_names_3d = info["gt_names"][mask]
+        gt_labels_3d = []
+        for cat in gt_names_3d:
+            if cat in self.CLASSES:
+                gt_labels_3d.append(self.CLASSES.index(cat))
+            else:
+                gt_labels_3d.append(-1)
+        gt_labels_3d = np.array(gt_labels_3d)
+
+        if self.with_velocity:
+            gt_velocity = info["gt_velocity"][mask]
+            nan_mask = np.isnan(gt_velocity[:, 0])
+            gt_velocity[nan_mask] = [0.0, 0.0]
+            gt_bboxes_3d = np.concatenate([gt_bboxes_3d, gt_velocity], axis=-1)
+
+        # the nuscenes box center is [0.5, 0.5, 0.5], we change it to be
+        # the same as KITTI (0.5, 0.5, 0)
+        # haotian: this is an important change: from 0.5, 0.5, 0.5 -> 0.5, 0.5, 0
+        gt_bboxes_3d = LiDARInstance3DBoxes(
+            gt_bboxes_3d, box_dim=gt_bboxes_3d.shape[-1], origin=(0.5, 0.5, 0)
+        ).convert_to(self.box_mode_3d)
+
+        anns_results = dict(
+            gt_bboxes_3d=gt_bboxes_3d,
+            gt_labels_3d=gt_labels_3d,
+            gt_names=gt_names_3d,
+        )
+        return anns_results

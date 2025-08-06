@@ -282,7 +282,8 @@ def convert_json_to_annotations(json_data:List[dict]):
     annotations['rotation_y'] = np.array([obj[6] for obj in gt_boxes])
     annotations['score'] = np.zeros(num_gt, dtype=np.float32)
     annotations['difficulty'] = np.zeros(num_gt, dtype=np.float32)
-    annotations['gt_boxes_lidar'] = gt_boxes_lidar
+    # annotations['gt_boxes_lidar'] = gt_boxes_lidar
+    annotations['gt_bboxes_3d'] = gt_boxes_lidar
     return annotations
 
 
@@ -324,6 +325,11 @@ def fill_trainval_infos(kl:KL,train_samples,val_samples,test_samples):
             data = json.load(f)
         # gt_boxes,gt_names,gt_subtypes,gt_boxes_token,gt_track_ids=convert_json_to_gt(data)
         annotations=convert_json_to_annotations(data)
+        
+        gt_boxes=annotations["gt_bboxes_3d"]
+        gt_names=annotations["name"]
+        num_lidar_pts=annotations["num_lidar_pts"]
+        location=annotations["location"]
         with open(sample['extrinsics_path'], 'r', encoding='utf-8') as f:
             extrinsice_data = json.load(f)
 
@@ -351,9 +357,11 @@ def fill_trainval_infos(kl:KL,train_samples,val_samples,test_samples):
         info = {
             'token': sample['token'],
             'timestamp': sample['timestamp'],
-            'annos': annotations,
-            # 'gt_boxes':gt_boxes,
-            # 'gt_names':gt_names,
+            # 'annos': annotations,
+            'gt_boxes':gt_boxes,
+            'gt_names':gt_names,
+            'num_lidar_pts':num_lidar_pts,
+            'location':location,
             # 'gt_subtypes':gt_subtypes,
             # 'gt_boxes_token':gt_boxes_token,
             # 'gt_track_ids':gt_track_ids,

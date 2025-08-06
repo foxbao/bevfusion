@@ -448,8 +448,8 @@ class LoadPointsFromMultipleFiles:
     def __init__(
         self,
         coord_type,
-        load_dim=6,
-        use_dim=[0, 1, 2],
+        load_dim=4,
+        use_dim=[0, 1, 2,3],
         shift_height=False,
         use_color=False,
         load_augmented=None,
@@ -457,6 +457,19 @@ class LoadPointsFromMultipleFiles:
         use_intensity_filter=False,
         intensity_threshold=5):
         # self.file_list = file_list
+
+        
+        
+        if isinstance(use_dim, int):
+            use_dim = list(range(use_dim))
+        assert (
+            max(use_dim) < load_dim
+        ), f"Expect all used dimensions < {load_dim}, got {use_dim}"
+        assert coord_type in ["CAMERA", "LIDAR", "DEPTH"]
+        
+        self.coord_type=coord_type
+        self.use_dim=use_dim
+        self.load_dim=load_dim
         self.use_intensity_filter=use_intensity_filter
         self.intensity_threshold=intensity_threshold
         
@@ -541,6 +554,15 @@ class LoadPointsFromMultipleFiles:
         
 
         points=self.get_merged_lidar(results)
+        points = points.reshape(-1, self.load_dim)
+        
+        points = points[:, self.use_dim]
+        attribute_dims = None
+        
+        points_class = get_points_type(self.coord_type)
+        points = points_class(
+            points, points_dim=points.shape[-1], attribute_dims=attribute_dims
+        )
         results["points"] = points
         return results
 
