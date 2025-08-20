@@ -178,23 +178,34 @@ if __name__ == "__main__":
         #     load_augmented=load_augmented,
         # )
     elif args.dataset == "nuscenes" and args.version == "v1.0-mini":
-        train_version = f"{args.version}"
+        mini_version = f"{args.version}"
         nuscenes_data_prep(
             root_path=args.root_path,
             info_prefix=args.extra_tag,
-            version=train_version,
+            version=mini_version,
             dataset_name="NuScenesDataset",
             out_dir=args.out_dir,
             max_sweeps=args.max_sweeps,
             load_augmented=load_augmented,
         )
         
-    elif args.dataset=="kl":
+    elif args.dataset=="kl" and args.version != "v1.0-mini":
         train_version = f"{args.version}-trainval"
         kl_data_prep(
             root_path=args.root_path,
             info_prefix=args.extra_tag,
             version=train_version,
+            dataset_name="KLDataset",
+            out_dir=args.out_dir,
+            max_sweeps=args.max_sweeps,
+            load_augmented=load_augmented,
+        )
+    elif args.dataset == "kl" and args.version == "v1.0-mini":
+        mini_version = f"{args.version}"
+        kl_data_prep(
+            root_path=args.root_path,
+            info_prefix=args.extra_tag,
+            version=mini_version,
             dataset_name="KLDataset",
             out_dir=args.out_dir,
             max_sweeps=args.max_sweeps,

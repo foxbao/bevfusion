@@ -358,6 +358,19 @@ class KLDataset(Custom3DDataset):
             sensor_extrinsics=info["sensor_extrinsics"],
         )
         
+        
+        # ego to global transform
+        ego2global = np.eye(4).astype(np.float32)
+        # ego2global[:3, :3] = Quaternion(info["ego2global_rotation"]).rotation_matrix
+        # ego2global[:3, 3] = info["ego2global_translation"]
+        data["ego2global"] = ego2global
+
+        # lidar to ego transform
+        lidar2ego = np.eye(4).astype(np.float32)
+        # lidar2ego[:3, :3] = Quaternion(info["lidar2ego_rotation"]).rotation_matrix
+        # lidar2ego[:3, 3] = info["lidar2ego_translation"]
+        data["lidar2ego"] = lidar2ego
+        
         if self.modality["use_camera"]:
             data["image_paths"] = []
             data["lidar2camera"] = []
@@ -365,71 +378,54 @@ class KLDataset(Custom3DDataset):
             data["camera2ego"] = []
             data["camera_intrinsics"] = []
             data["camera2lidar"] = []
-        # if self._merge_all_iters_to_one_epoch:
-        #     index = index % len(self.infos)
-        
-        # info = copy.deepcopy(self.infos[index])
-
-        # points=self.get_merged_lidar(index,True)
-        # # check_nan_inf(points)
-        # input_dict = {
-        #     'points': points,
-        #     'frame_id': Path(info['lidars']['helios_front_left']).stem,
-        #     'metadata': {'token': info['token']}
-        # }
-
-        # if 'annos' in info:
-        #     annos = info['annos']
-        #     gt_names = annos['name']
-        #     gt_boxes_lidar = annos['gt_boxes_lidar']
-        #     gt_num_lidar_pts=annos['num_lidar_pts']
             
-        #     # ⭐ 点数过滤逻辑开始 ⭐
-        #     if getattr(self, 'filter_gt_by_points', False):
-        #         keep_mask = np.ones(len(gt_names), dtype=bool)
-        #         for i in range(len(gt_names)):
-        #             cls = gt_names[i]
-        #             min_pts = self.class_min_points_dict.get(cls, 0)
-        #             if gt_num_lidar_pts[i] < min_pts:
-        #                 keep_mask[i] = False
+        else:
+            data["image_paths"] = []
+            data["lidar2camera"] = []
+            data["lidar2image"] = []
+            data["camera2ego"] = []
+            data["camera_intrinsics"] = []
+            data["camera2lidar"] = []
+            
+            
+            # 造假的相机
+            fake_image_path = "/path/to/fake_image.jpg"  # 可以放一张黑图占位
+            data["image_paths"].append(fake_image_path)
 
-        #         gt_names = gt_names[keep_mask]
-        #         gt_boxes_lidar = gt_boxes_lidar[keep_mask]
-        #         gt_num_lidar_pts = gt_num_lidar_pts[keep_mask]
-        #     # ⭐ 点数过滤逻辑结束 ⭐
+            # 假设相机在激光雷达前 1 米，高度 1.5 米
+            trans = np.array([1.0, 0.0, 1.5], dtype=np.float32)
+            rot = np.eye(3, dtype=np.float32)
 
-        #     input_dict.update({
-        #         'gt_names': gt_names,
-        #         'gt_boxes': gt_boxes_lidar
-        #         # 'gt_num_lidar_pts':gt_num_lidar_pts
-        #     })
+            # lidar -> camera
+            lidar2camera_rt = np.eye(4).astype(np.float32)
+            lidar2camera_rt[:3, :3] = rot
+            lidar2camera_rt[:3, 3] = -trans  # 反向平移
+            data["lidar2camera"].append(lidar2camera_rt)
 
-        # if self.use_camera:
-        #     input_dict = self.load_camera_info(input_dict, info)
+            # camera intrinsics（假设 1920x1080 图像）
+            fx = fy = 1000.0
+            cx, cy = 960.0, 540.0
+            camera_intrinsics = np.eye(4).astype(np.float32)
+            camera_intrinsics[0, 0] = fx
+            camera_intrinsics[1, 1] = fy
+            camera_intrinsics[0, 2] = cx
+            camera_intrinsics[1, 2] = cy
+            data["camera_intrinsics"].append(camera_intrinsics)
 
-        # # data_dict = self.prepare_data(data_dict=input_dict)
-        # data_dict=input_dict
-        
-        # if 'gt_boxes' in info:
-        #     gt_boxes = data_dict['gt_boxes']
-        #     gt_boxes[np.isnan(gt_boxes)] = 0
-        #     data_dict['gt_boxes'] = gt_boxes
-        
-        
-        # if self.dataset_cfg.get('SET_NAN_VELOCITY_TO_ZEROS', False) and 'gt_boxes' in info:
-        #     gt_boxes = data_dict['gt_boxes']
-        #     gt_boxes[np.isnan(gt_boxes)] = 0
-        #     data_dict['gt_boxes'] = gt_boxes
+            # lidar -> image
+            lidar2image = camera_intrinsics @ lidar2camera_rt
+            data["lidar2image"].append(lidar2image)
 
-        # # if not self.dataset_cfg.PRED_VELOCITY and 'gt_boxes' in data_dict:
-        # #     data_dict['gt_boxes'] = data_dict['gt_boxes'][:, [0, 1, 2, 3, 4, 5, 6, -1]]
-        # data_dict['timestamp']=info['timestamp']
-        # helios_front_left_path=info['lidars']['helios_front_left']
-        # parts = helios_front_left_path.split('/')
-        # sample_index = parts.index('sample')
-        # folder = '/'.join(parts[sample_index+1:sample_index+3])
-        # data_dict['folder']=folder
-        
+            # camera -> ego（假设相机和激光雷达同在车体坐标系中）
+            camera2ego = np.eye(4).astype(np.float32)
+            camera2ego[:3, :3] = rot
+            camera2ego[:3, 3] = trans
+            data["camera2ego"].append(camera2ego)
+
+            # camera -> lidar（直接取反）
+            camera2lidar = np.linalg.inv(lidar2camera_rt)
+            data["camera2lidar"].append(camera2lidar)
+            
         annos = self.get_ann_info(index)
         data["ann_info"] = annos
 

@@ -10,7 +10,6 @@ from mmdet.datasets import PIPELINES
 from ..builder import OBJECTSAMPLERS
 from .utils import box_collision_test
 
-
 class BatchSampler:
     """Class for sampling specific category of ground truths.
 

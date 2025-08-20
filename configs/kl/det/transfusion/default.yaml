@@ -6,7 +6,7 @@ model:
       auxiliary: true
       in_channels: null
       hidden_channel: 128
-      num_classes: 10
+      num_classes: 15
       num_decoder_layers: 1
       num_heads: 8
       nms_kernel_size: 3
@@ -15,7 +15,7 @@ model:
       bn_momentum: 0.1
       activation: relu
       train_cfg:
-        dataset: nuScenes
+        dataset: kl
         point_cloud_range: ${point_cloud_range}
         grid_size: [1024, 1024, 1]
         voxel_size: ${voxel_size}

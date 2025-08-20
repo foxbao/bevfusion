@@ -270,7 +270,8 @@ class TransFusionHead(nn.Module):
         top_proposals = heatmap.view(batch_size, -1).argsort(dim=-1, descending=True)[
             ..., : self.num_proposals
         ]
-        top_proposals_class = top_proposals // heatmap.shape[-1]
+        # top_proposals_class = top_proposals // heatmap.shape[-1]
+        top_proposals_class = torch.div(top_proposals, heatmap.shape[-1], rounding_mode='trunc')
         top_proposals_index = top_proposals % heatmap.shape[-1]
         query_feat = lidar_feat_flatten.gather(
             index=top_proposals_index[:, None, :].expand(
@@ -532,7 +533,8 @@ class TransFusionHead(nn.Module):
         pc_range = torch.tensor(self.train_cfg["point_cloud_range"])
         voxel_size = torch.tensor(self.train_cfg["voxel_size"])
         feature_map_size = (
-            grid_size[:2] // self.train_cfg["out_size_factor"]
+            # grid_size[:2] // self.train_cfg["out_size_factor"]
+            torch.div(grid_size[:2], self.train_cfg["out_size_factor"], rounding_mode='trunc')
         )  # [x_len, y_len]
         heatmap = gt_bboxes_3d.new_zeros(
             self.num_classes, feature_map_size[1], feature_map_size[0]

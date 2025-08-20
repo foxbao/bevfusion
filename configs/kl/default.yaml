@@ -58,9 +58,9 @@ input_modality:
   use_external: false
 
 train_pipeline:
-  -
-    type: LoadMultiViewImageFromFiles
-    to_float32: true
+  # -
+  #   type: LoadMultiViewImageFromFiles
+  #   to_float32: true
   -
     type: LoadPointsFromMultipleFiles
     coord_type: LIDAR
@@ -130,14 +130,14 @@ train_pipeline:
         load_dim: ${load_dim}
         use_dim: ${use_dim}
         reduce_beams: ${reduce_beams}
-  -
-    type: ImageAug3D
-    final_dim: ${image_size}
-    resize_lim: ${augment2d.resize[0]}
-    bot_pct_lim: [0.0, 0.0]
-    rot_lim: ${augment2d.rotate}
-    rand_flip: true
-    is_train: true
+  # -
+  #   type: ImageAug3D
+  #   final_dim: ${image_size}
+  #   resize_lim: ${augment2d.resize[0]}
+  #   bot_pct_lim: [0.0, 0.0]
+  #   rot_lim: ${augment2d.rotate}
+  #   rand_flip: true
+  #   is_train: true
   -
     type: GlobalRotScaleTrans
     resize_lim: ${augment3d.scale}
@@ -155,10 +155,10 @@ train_pipeline:
   -
     type: ObjectNameFilter
     classes: ${object_classes}
-  -
-    type: ImageNormalize
-    mean: [0.485, 0.456, 0.406]
-    std: [0.229, 0.224, 0.225]
+  # -
+  #   type: ImageNormalize
+  #   mean: [0.485, 0.456, 0.406]
+  #   std: [0.229, 0.224, 0.225]
   - 
     type: GridMask
     use_h: true
@@ -178,11 +178,11 @@ train_pipeline:
   -
     type: Collect3D
     keys:
-      - img
+      # - img
       - points
       - gt_bboxes_3d
       - gt_labels_3d
-      - gt_masks_bev
+      # - gt_masks_bev
     meta_keys:
       - camera_intrinsics
       - camera2ego
@@ -244,8 +244,8 @@ test_pipeline:
       - lidar_aug_matrix
 
 data:
-  samples_per_gpu: 4
-  workers_per_gpu: 4
+  samples_per_gpu: 1
+  workers_per_gpu: 1
   train:
     type: CBGSDataset
     dataset:
