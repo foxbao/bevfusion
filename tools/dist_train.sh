@@ -56,6 +56,6 @@ $PYTHON_BIN -m torch.distributed.run \
   --nproc_per_node=$GPUS \
   --master_addr=$MASTER_ADDR \
   --master_port=$PORT \
-  "$(dirname "$0")/train.py" \
+  "$(dirname "$0")/train_modified.py" \
   "$CONFIG" \
   --launcher pytorch "$@" $RESUME_ARG
