@@ -88,7 +88,7 @@ def kl_data_prep(
             version=version,
             data_path=ROOT_DIR / folder / name,
             save_path=ROOT_DIR /folder / name,
-            with_cam=False)
+            with_cam=True)
         
         # kl_dataset = KLDataset(
         #     dataset_cfg=dataset_cfg, class_names=None,

@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
       {
-        "name": "Create NuScenes Data",
+        "name": "Create KL mini Data",
         "type": "debugpy",
         "request": "launch",
         "program": "${workspaceFolder}/tools/create_data.py",

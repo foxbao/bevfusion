@@ -15,7 +15,31 @@ from mmdet.datasets import DATASETS
 from ..core.bbox import LiDARInstance3DBoxes
 from .custom_3d import Custom3DDataset
 from scipy.spatial.transform import Rotation as R
+from collections import defaultdict
+from mmdet3d.core.bbox.iou_calculators.iou3d_calculator import BboxOverlaps3D,BboxOverlapsNearest3D, AxisAlignedBboxOverlaps3D
 
+
+def iou3d(box_a, box_b):
+    # 简化版 IoU 计算（AABB，不考虑旋转）
+    # box: [x, y, z, l, w, h, ry]
+    ax1, ay1, az1 = box_a[0]-box_a[3]/2, box_a[1]-box_a[4]/2, box_a[2]-box_a[5]/2
+    ax2, ay2, az2 = box_a[0]+box_a[3]/2, box_a[1]+box_a[4]/2, box_a[2]+box_a[5]/2
+    bx1, by1, bz1 = box_b[0]-box_b[3]/2, box_b[1]-box_b[4]/2, box_b[2]-box_b[5]/2
+    bx2, by2, bz2 = box_b[0]+box_b[3]/2, box_b[1]+box_b[4]/2, box_b[2]+box_b[5]/2
+    ix1, iy1, iz1 = max(ax1,bx1), max(ay1,by1), max(az1,bz1)
+    ix2, iy2, iz2 = min(ax2,bx2), min(ay2,by2), min(az2,bz2)
+    iw, ih, id_ = max(ix2-ix1,0), max(iy2-iy1,0), max(iz2-iz1,0)
+    inter = iw*ih*id_
+    vol_a = (ax2-ax1)*(ay2-ay1)*(az2-az1)
+    vol_b = (bx2-bx1)*(by2-by1)*(bz2-bz1)
+    return inter / (vol_a+vol_b-inter+1e-6)
+
+def compute_ap(recall, precision):
+    ap = 0.0
+    for t in np.linspace(0, 1, 11):
+        p = precision[recall >= t].max() if np.any(recall >= t) else 0
+        ap += p / 11
+    return ap
 def check_nan_inf(arr):
     """
     检查数组中是否有 NaN 或 Inf，并打印其位置。
@@ -248,7 +272,7 @@ class KLDataset(Custom3DDataset):
         self.eval_detection_configs = config_factory(self.eval_version)
         if self.modality is None:
             self.modality = dict(
-                use_camera=False,
+                use_camera=True,
                 use_lidar=True,
                 use_radar=False,
                 use_map=False,
@@ -256,6 +280,16 @@ class KLDataset(Custom3DDataset):
             )
         self.use_camera=self.modality.get('use_camera', False)
         self.infos=self.data_infos
+        self.fixed_cams = [
+            # "h100f1a_front_left",
+            # "h100f1a_rear_right",
+            "h120ua_front_left",
+            "h120ua_front_mid",
+            "h120ua_front_right",
+            "h120ua_rear_left",
+            "h120ua_rear_mid",
+            "h120ua_rear_right"
+        ]
         
     def get_merged_lidar(self,index,use_extrinsic=True)->np.ndarray:
         
@@ -347,7 +381,8 @@ class KLDataset(Custom3DDataset):
     
     def get_data_info(self, index: int) -> Dict[str, Any]:
         
-        info = copy.deepcopy(self.infos[index])
+        # info = copy.deepcopy(self.infos[index])
+        info = self.data_infos[index]
         data = dict(
             token=info["token"],
             sample_idx=info['token'],
@@ -356,6 +391,7 @@ class KLDataset(Custom3DDataset):
             timestamp=info["timestamp"],
             localization=info["localization"],
             sensor_extrinsics=info["sensor_extrinsics"],
+            label_path=info["label_path"],
         )
         
         
@@ -379,6 +415,56 @@ class KLDataset(Custom3DDataset):
             data["camera_intrinsics"] = []
             data["camera2lidar"] = []
             
+            for cam_name in self.fixed_cams:
+                if cam_name in info["cams"]:
+                    camera_info = info["cams"][cam_name]
+
+                    data["image_paths"].append(camera_info["data_path"])
+                    # lidar -> camera
+                    lidar2camera_r = np.linalg.inv(camera_info["sensor2lidar_rotation"])
+                    lidar2camera_t = (
+                        camera_info["sensor2lidar_translation"] @ lidar2camera_r.T
+                    )
+                    lidar2camera_rt = np.eye(4).astype(np.float32)
+                    lidar2camera_rt[:3, :3] = lidar2camera_r.T
+                    lidar2camera_rt[3, :3] = -lidar2camera_t
+                    data["lidar2camera"].append(lidar2camera_rt.T)
+
+                    # camera intrinsics
+                    camera_intrinsics = np.eye(4).astype(np.float32)
+                    camera_intrinsics[:3, :3] = camera_info["camera_intrinsics"]
+                    data["camera_intrinsics"].append(camera_intrinsics)
+
+                    # lidar -> image
+                    lidar2image = camera_intrinsics @ lidar2camera_rt.T
+                    data["lidar2image"].append(lidar2image)
+
+                    # camera -> ego
+                    camera2ego = np.eye(4).astype(np.float32)
+                    camera2ego[:3, :3] = Quaternion(
+                        camera_info["sensor2ego_rotation"]
+                    ).rotation_matrix
+                    camera2ego[:3, 3] = camera_info["sensor2ego_translation"]
+                    data["camera2ego"].append(camera2ego)
+
+                    # camera -> lidar
+                    camera2lidar = np.eye(4).astype(np.float32)
+                    camera2lidar[:3, :3] = camera_info["sensor2lidar_rotation"]
+                    camera2lidar[:3, 3] = camera_info["sensor2lidar_translation"]
+                    data["camera2lidar"].append(camera2lidar)
+
+                else:
+                    # 缺失相机：用黑图和单位矩阵占位
+                    H, W = 900, 1600  # 按照你的图像分辨率来
+                    fake_path = "/home/baojiali/Downloads/public_code/bevfusion/fake_black.jpg"
+                    data["image_paths"].append(fake_path)
+
+                    data["lidar2camera"].append(np.eye(4, dtype=np.float32))
+                    data["lidar2image"].append(np.eye(4, dtype=np.float32))
+                    data["camera2ego"].append(np.eye(4, dtype=np.float32))
+                    data["camera_intrinsics"].append(np.eye(4, dtype=np.float32))
+                    data["camera2lidar"].append(np.eye(4, dtype=np.float32))
+
         else:
             data["image_paths"] = []
             data["lidar2camera"] = []
@@ -389,7 +475,7 @@ class KLDataset(Custom3DDataset):
             
             
             # 造假的相机
-            fake_image_path = "/path/to/fake_image.jpg"  # 可以放一张黑图占位
+            fake_image_path = "/home/baojiali/Downloads/public_code/bevfusion/n008-2018-05-21-11-06-59-0400__CAM_BACK__1526915243037570.jpg"  # 可以放一张黑图占位
             data["image_paths"].append(fake_image_path)
 
             # 假设相机在激光雷达前 1 米，高度 1.5 米
@@ -455,7 +541,10 @@ class KLDataset(Custom3DDataset):
             nan_mask = np.isnan(gt_velocity[:, 0])
             gt_velocity[nan_mask] = [0.0, 0.0]
             gt_bboxes_3d = np.concatenate([gt_bboxes_3d, gt_velocity], axis=-1)
-
+        # 即使真值里面没有速度，也不上vel两维，凑成9维度，配合检测端的维度
+        else:
+            zeros = np.zeros((gt_bboxes_3d.shape[0], 2), dtype=gt_bboxes_3d.dtype)
+            gt_bboxes_3d = np.concatenate([gt_bboxes_3d, zeros], axis=-1)
         # the nuscenes box center is [0.5, 0.5, 0.5], we change it to be
         # the same as KITTI (0.5, 0.5, 0)
         # haotian: this is an important change: from 0.5, 0.5, 0.5 -> 0.5, 0.5, 0
@@ -469,3 +558,95 @@ class KLDataset(Custom3DDataset):
             gt_names=gt_names_3d,
         )
         return anns_results
+    
+    def evaluate(self, results, metric=None, iou_thr=0.5, logger=None, **kwargs):
+        preds, gts = defaultdict(list), defaultdict(list)
+
+        # ==== 整理预测 ====
+        for i, res in enumerate(results):
+            frame_id = self.data_infos[i]['token']
+            boxes = res['boxes_3d'].tensor.cpu()   # (N, 7)
+            labels = res['labels_3d'].cpu().numpy()
+            scores = res['scores_3d'].cpu().numpy()
+            for b, l, s in zip(boxes, labels, scores):
+                preds[frame_id].append({
+                    "class": self.CLASSES[l],
+                    "box": b.unsqueeze(0),   # 保留7维
+                    "score": float(s)
+                })
+
+        # ==== 整理GT ====
+        for i, info in enumerate(self.data_infos):
+            frame_id = info['token']
+            annos = self.get_ann_info(i)
+            gt_boxes = annos['gt_bboxes_3d'].tensor.cpu()
+            gt_labels = annos['gt_labels_3d']
+            for b, l in zip(gt_boxes, gt_labels):
+                if l >= 0:
+                    gts[frame_id].append({
+                        "class": self.CLASSES[l],
+                        "box": b.unsqueeze(0)
+                    })
+
+        # IoU 计算器（3D）
+        iou_calculators = {
+            "3D": BboxOverlaps3D("lidar"),             # 支持旋转7维
+            "BEV": BboxOverlapsNearest3D("lidar"),    # 至少7维
+            "AxisAligned": AxisAlignedBboxOverlaps3D() # 只接受6维
+        }
+
+        # ==== 每类计算AP ====
+        results_eval = {}
+
+        for cls in self.CLASSES:
+            pred_list = [obj for f in preds for obj in preds[f] if obj["class"] == cls]
+            gt_list   = [obj for f in gts for obj in gts[f] if obj["class"] == cls]
+            pred_list = sorted(pred_list, key=lambda x: x["score"], reverse=True)
+
+            for iou_name, iou_calculator in iou_calculators.items():
+                tp, fp = np.zeros(len(pred_list)), np.zeros(len(pred_list))
+                gt_used = [False] * len(gt_list)
+
+                for i, pred in enumerate(pred_list):
+                    cand_gts = [gt for j, gt in enumerate(gt_list) if not gt_used[j]]
+                    if not cand_gts:
+                        fp[i] = 1
+                        continue
+
+                    # 根据 IoU 类型选择维度
+                    if iou_name in ["3D", "BEV"]:
+                        # 保留7维
+                        pred_box = pred["box"].cuda()
+                        gt_boxes = torch.cat([gt["box"] for gt in cand_gts]).cuda()
+                    else:  # AxisAligned
+                        # 取前6维
+                        pred_box = pred["box"][:, :6].cuda()
+                        gt_boxes = torch.cat([gt["box"][:, :6] for gt in cand_gts]).cuda()
+
+                    ious = iou_calculator(pred_box, gt_boxes, mode="iou").cpu().numpy()[0]
+                    max_iou_idx = np.argmax(ious)
+                    if ious[max_iou_idx] >= iou_thr:
+                        tp[i] = 1
+                        gt_used[max_iou_idx] = True
+                    else:
+                        fp[i] = 1
+
+                tp_cum, fp_cum = np.cumsum(tp), np.cumsum(fp)
+                recall = tp_cum / (len(gt_list) + 1e-6)
+                precision = tp_cum / (tp_cum + fp_cum + 1e-6)
+                ap = compute_ap(recall, precision)
+                results_eval[f"{cls}_AP_{iou_name}"] = ap
+
+        # ==== 美化输出 ====
+        print("\n===== KITTI-style Evaluation Results =====")
+        print(f"IoU Threshold: {iou_thr}")
+        print(f"{'Class':<20} {'3D AP':<10} {'BEV AP':<10} {'AxisAligned AP':<15}")
+        for cls in self.CLASSES:
+            ap3d  = results_eval.get(f"{cls}_AP_3D", 0)
+            apbev = results_eval.get(f"{cls}_AP_BEV", 0)
+            apax  = results_eval.get(f"{cls}_AP_AxisAligned", 0)
+            print(f"{cls:<20} {ap3d:<10.4f} {apbev:<10.4f} {apax:<15.4f}")
+        print("==========================================\n")
+
+        return results_eval
+

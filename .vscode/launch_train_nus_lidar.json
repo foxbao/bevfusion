@@ -15,7 +15,7 @@
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "env": {
-        "MASTER_ADDR": "localhost",
+        "MASTER_HOST": "127.0.0.1:29500",
         "MASTER_PORT": "12345",
         "RANK": "0",
         "WORLD_SIZE": "1"

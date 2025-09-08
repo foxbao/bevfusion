@@ -5,21 +5,21 @@
       "name": "Debug BEVFusion (single GPU)",
       "type": "debugpy",
       "request": "launch",
-      "program": "tools/train.py",
+      "program": "tools/test.py",
       "console": "integratedTerminal",
       "args": [
         "configs/kl/det/transfusion/secfpn/lidar/voxelnet_0p075.yaml",
-        "--run-dir",
-        "output/debug_run_kl/"
+        "output/lidar_result/latest.pth",
+        "--eval","bbox"
       ],
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "env": {
-        "CUDA_VISIBLE_DEVICES": "0",
-        "MASTER_HOST": "127.0.0.1:29500", 
-        "MASTER_PORT": "12345",
+        "MASTER_HOST": "127.0.0.1:29500",   // 注意加端口
+        "MASTER_PORT": "29500",
+        "WORLD_SIZE": "1",
         "RANK": "0",
-        "WORLD_SIZE": "1"
+        "LOCAL_RANK": "0"
       }
     }
   ]

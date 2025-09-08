@@ -1,5 +1,6 @@
 voxel_size: [0.075, 0.075, 0.2]
-point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+# 修改了范围，特别是z
+point_cloud_range: [-54.0, -54.0, -3.0, 54.0, 54.0, 5.0]
 
 model:
   encoders:
@@ -11,7 +12,8 @@ model:
         max_voxels: [120000, 160000]
       backbone:
         type: SparseEncoder
-        in_channels: 5
+        # 这里要改成4，因为输入的points是4维的
+        in_channels: 4
         sparse_shape: [1440, 1440, 41]
         output_channels: 128
         order:

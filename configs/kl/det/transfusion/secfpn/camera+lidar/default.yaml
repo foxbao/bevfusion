@@ -35,7 +35,8 @@ model:
         max_voxels: [90000, 120000]
       backbone:
         type: SparseEncoder
-        in_channels: 5
+        # 这里要改成4，因为输入的points是4维的
+        in_channels: 4
         sparse_shape: [1024, 1024, 41]
         output_channels: 128
         order:

@@ -4,8 +4,8 @@ from .kl import KL
 
 def split_samples(samples):
     total_files = len(samples)
-    train_size = int(total_files * 0.9)
-    val_size = int(total_files * 0.09)
+    train_size = int(total_files * 0.95)
+    val_size = int(total_files * 0.05)
     split_samples = {
         'train': samples[:train_size],
         'val': samples[train_size:train_size + val_size],

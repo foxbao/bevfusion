@@ -54,8 +54,17 @@ class LoadMultiViewImageFromFiles:
         # modified for waymo
         images = []
         h, w = 0, 0
+        # for name in filename:
+        #     images.append(Image.open(name))
+
+        # 尝试读取真实图片，失败时生成黑图
         for name in filename:
-            images.append(Image.open(name))
+            try:
+                img = Image.open(name)
+            except Exception:
+                # 图片缺失或读取失败，生成黑图
+                img = Image.new("RGB", (1280, 720), (0, 0, 0))
+            images.append(img)
         
         #TODO: consider image padding in waymo
 

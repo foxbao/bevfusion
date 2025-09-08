@@ -103,7 +103,6 @@ class KL():
                                 sample['intrinsics_path']=intrinsics_path
                                 self.samples.append(sample)
                                 # 构建对应的 bin 文件名
-        aaa=1
     
     def get_all_sample(self):
         return self.samples

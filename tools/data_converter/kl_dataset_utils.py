@@ -347,13 +347,8 @@ def fill_trainval_infos(kl:KL,train_samples,val_samples,test_samples):
             with open(loc_path, 'r', encoding='utf-8') as f:
                 state = json.load(f)
         else:
-            state = None            
-
-        # with open(sample['intrinsics_path'], 'r', encoding='utf-8') as f:
-        #     intrinsice_data = json.load(f)
-        # with open(sample['localization'], 'r', encoding='utf-8') as f:
-        #     state=json.load(f)
-        # 为每个样本添加 timestamp、token 和 pointcloud_path
+            state = None           
+            
         info = {
             'token': sample['token'],
             'timestamp': sample['timestamp'],
@@ -366,12 +361,67 @@ def fill_trainval_infos(kl:KL,train_samples,val_samples,test_samples):
             # 'gt_boxes_token':gt_boxes_token,
             # 'gt_track_ids':gt_track_ids,
             'lidars': sample['lidars'],
-            'cameras': sample['cameras'],
+            'cams': dict(),
             'localization': sample['localization'],
             'state':state,
             'sensor_extrinsics': extrinsice_data,
-            'sensor_intrinsics': intrinsice_data
+            'sensor_intrinsics': intrinsice_data,
+            'label_path': sample['label'],
+            "lidar2ego_translation": [0.0, 0.0, 0.0],
+            "lidar2ego_rotation": [1.0, 0.0, 0.0, 0.0],
+            "ego2global_translation": [0.0, 0.0, 0.0],
+            "ego2global_rotation": [1.0, 0.0, 0.0, 0.0],
         }
+        # 待补充真实外参数据
+        
+        # if not sample['cameras']:
+        #     continue
+        
+        for camera_type,data_path in sample['cameras'].items():
+            camera_info=dict()
+            camera_info['data_path'] = data_path
+            camera_info["sensor2lidar_rotation"] = np.array([
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0]
+            ], dtype=np.float32)
+            camera_info["sensor2lidar_translation"] = np.array([0.5, 0.0, -1.5], dtype=np.float32)
+            camera_info["camera_intrinsics"] = np.array([
+                [1200.0, 0.0,   800.0],
+                [0.0,   1200.0, 600.0],
+                [0.0,      0.0,   1.0]
+            ], dtype=np.float32)
+            camera_info["sensor2ego_rotation"] = [0.9659, 0.0, 0.2588, 0.0]  # yaw = 30°
+            camera_info["sensor2ego_translation"] = np.array([1.5, 0.0, 1.2], dtype=np.float32)
+
+            info["cams"].update({camera_type: camera_info})
+            
+        # camera_types = [
+        #     "CAM_FRONT",
+        #     "CAM_FRONT_RIGHT",
+        #     "CAM_FRONT_LEFT",
+        #     "CAM_BACK",
+        #     "CAM_BACK_LEFT",
+        #     "CAM_BACK_RIGHT",
+        # ]
+        
+        # for cam in camera_types:
+        #     # cam_token = sample["data"][cam]
+        #     # cam_path, _, camera_intrinsics = nusc.get_sample_data(cam_token)
+            
+            
+        #     cam_info = obtain_sensor2top(
+        #         nusc, cam_token, l2e_t, l2e_r_mat, e2g_t, e2g_r_mat, cam
+        #     )
+        #     cam_info.update(camera_intrinsics=camera_intrinsics)
+        #     info["cams"].update({cam: cam_info})
+
+        # with open(sample['intrinsics_path'], 'r', encoding='utf-8') as f:
+        #     intrinsice_data = json.load(f)
+        # with open(sample['localization'], 'r', encoding='utf-8') as f:
+        #     state=json.load(f)
+        # 为每个样本添加 timestamp、token 和 pointcloud_path
+
 
         # gt_boxes增加速度
         # gt_boxes=info['gt_boxes']

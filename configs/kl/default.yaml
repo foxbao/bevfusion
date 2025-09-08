@@ -52,15 +52,60 @@ map_classes:
 
 input_modality:
   use_lidar: true
-  use_camera: false
+  use_camera: true
   use_radar: false
   use_map: false
   use_external: false
 
+# 啦啦啦
+custom_cfg:
+  POINT_FILTER: 
+    ENABLED: True
+    FILTER_MIN_POINTS_BY_CLASS:
+      Pedestrian: 5
+      Car: 10
+      IGV-Full: 10
+      Truck: 10
+      Trailer-Empty: 10
+      Trailer-Full: 10
+      IGV-Empty: 10
+      Crane: 20
+      OtherVehicle: 5
+      Cone: 5
+      ContainerForklift: 10
+      Forklift: 10
+      Lorry: 10
+      ConstructionVehicle: 5
+      WheelCrane: 30
+  eval_cfg:
+    class_range:
+      Pedestrian: 50
+      Car: 50
+      IGV-Full: 50
+      Truck: 50
+      Trailer-Empty: 50
+      Trailer-Full: 50
+      IGV-Empty: 50
+      Crane: 50
+      OtherVehicle: 50
+      Cone: 50
+      ContainerForklift: 50
+      Forklift: 50
+      Lorry: 50
+      ConstructionVehicle: 50
+      WheelCrane: 50
+    dist_fcn: "center_distance"
+    dist_ths: [0.5, 1.0, 2.0, 4.0]
+    dist_th_tp: 2.0
+    min_recall: 0.1
+    min_precision: 0.1
+    max_boxes_per_sample: 500
+    mean_ap_weight: 5
+
 train_pipeline:
-  # -
-  #   type: LoadMultiViewImageFromFiles
-  #   to_float32: true
+  -
+    type: LoadMultiViewImageFromFiles
+    to_float32: true
   -
     type: LoadPointsFromMultipleFiles
     coord_type: LIDAR
@@ -130,14 +175,14 @@ train_pipeline:
         load_dim: ${load_dim}
         use_dim: ${use_dim}
         reduce_beams: ${reduce_beams}
-  # -
-  #   type: ImageAug3D
-  #   final_dim: ${image_size}
-  #   resize_lim: ${augment2d.resize[0]}
-  #   bot_pct_lim: [0.0, 0.0]
-  #   rot_lim: ${augment2d.rotate}
-  #   rand_flip: true
-  #   is_train: true
+  -
+    type: ImageAug3D
+    final_dim: ${image_size}
+    resize_lim: ${augment2d.resize[0]}
+    bot_pct_lim: [0.0, 0.0]
+    rot_lim: ${augment2d.rotate}
+    rand_flip: true
+    is_train: true
   -
     type: GlobalRotScaleTrans
     resize_lim: ${augment3d.scale}
@@ -155,10 +200,10 @@ train_pipeline:
   -
     type: ObjectNameFilter
     classes: ${object_classes}
-  # -
-  #   type: ImageNormalize
-  #   mean: [0.485, 0.456, 0.406]
-  #   std: [0.229, 0.224, 0.225]
+  -
+    type: ImageNormalize
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
   - 
     type: GridMask
     use_h: true
@@ -178,7 +223,7 @@ train_pipeline:
   -
     type: Collect3D
     keys:
-      # - img
+      - img
       - points
       - gt_bboxes_3d
       - gt_labels_3d
@@ -198,7 +243,7 @@ test_pipeline:
     type: LoadMultiViewImageFromFiles
     to_float32: true
   -
-    type: LoadPointsFromFile
+    type: LoadPointsFromMultipleFiles
     coord_type: LIDAR
     load_dim: ${load_dim}
     use_dim: ${use_dim}
@@ -209,6 +254,16 @@ test_pipeline:
     with_bbox_3d: true
     with_label_3d: true
     with_attr_label: False
+
+  -
+    type: ImageAug3D
+    final_dim: ${image_size}
+    resize_lim: ${augment2d.resize[1]}
+    bot_pct_lim: [0.0, 0.0]
+    rot_lim: [0.0, 0.0]
+    rand_flip: false
+    is_train: false
+
   -
     type: GlobalRotScaleTrans
     resize_lim: [1.0, 1.0]
@@ -232,7 +287,7 @@ test_pipeline:
       - points
       - gt_bboxes_3d
       - gt_labels_3d
-      - gt_masks_bev
+      # - gt_masks_bev
     meta_keys:
       - camera_intrinsics
       - camera2ego
@@ -244,8 +299,8 @@ test_pipeline:
       - lidar_aug_matrix
 
 data:
-  samples_per_gpu: 1
-  workers_per_gpu: 1
+  samples_per_gpu: 10
+  workers_per_gpu: 4
   train:
     type: CBGSDataset
     dataset:
@@ -259,6 +314,7 @@ data:
       test_mode: false
       use_valid_flag: false
       box_type_3d: LiDAR
+      custom_cfg: ${custom_cfg}
   val:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
@@ -269,6 +325,7 @@ data:
     modality: ${input_modality}
     test_mode: false
     box_type_3d: LiDAR
+    custom_cfg: ${custom_cfg}
   test:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
@@ -279,8 +336,9 @@ data:
     modality: ${input_modality}
     test_mode: true
     box_type_3d: LiDAR
+    custom_cfg: ${custom_cfg}
 
 evaluation:
-  interval: 1
+  interval: 5
   pipeline: ${test_pipeline}
  
