@@ -77,30 +77,30 @@ custom_cfg:
       Lorry: 10
       ConstructionVehicle: 5
       WheelCrane: 30
-  eval_cfg:
-    class_range:
-      Pedestrian: 50
-      Car: 50
-      IGV-Full: 50
-      Truck: 50
-      Trailer-Empty: 50
-      Trailer-Full: 50
-      IGV-Empty: 50
-      Crane: 50
-      OtherVehicle: 50
-      Cone: 50
-      ContainerForklift: 50
-      Forklift: 50
-      Lorry: 50
-      ConstructionVehicle: 50
-      WheelCrane: 50
-    dist_fcn: "center_distance"
-    dist_ths: [0.5, 1.0, 2.0, 4.0]
-    dist_th_tp: 2.0
-    min_recall: 0.1
-    min_precision: 0.1
-    max_boxes_per_sample: 500
-    mean_ap_weight: 5
+  # eval_cfg:
+  #   class_range:
+  #     Pedestrian: 50
+  #     Car: 50
+  #     IGV-Full: 50
+  #     Truck: 50
+  #     Trailer-Empty: 50
+  #     Trailer-Full: 50
+  #     IGV-Empty: 50
+  #     Crane: 50
+  #     OtherVehicle: 50
+  #     Cone: 50
+  #     ContainerForklift: 50
+  #     Forklift: 50
+  #     Lorry: 50
+  #     ConstructionVehicle: 50
+  #     WheelCrane: 50
+  #   dist_fcn: "center_distance"
+  #   dist_ths: [0.5, 1.0, 2.0, 4.0]
+  #   dist_th_tp: 2.0
+  #   min_recall: 0.1
+  #   min_precision: 0.1
+  #   max_boxes_per_sample: 500
+  #   mean_ap_weight: 5
 
 train_pipeline:
   -

@@ -515,11 +515,10 @@ class KLDataset(Custom3DDataset):
         annos = self.get_ann_info(index)
         data["ann_info"] = annos
 
+            
         return data
     
     def get_ann_info(self, index):
-        
-        
         info = self.data_infos[index]
         
         if self.use_valid_flag:
@@ -527,9 +526,25 @@ class KLDataset(Custom3DDataset):
         else:
             mask = info["num_lidar_pts"] > 0
         gt_bboxes_3d = info["gt_boxes"][mask]
-        gt_names_3d = info["gt_names"][mask]
+        gt_names = info["gt_names"][mask]
+        num_lidar_pts=info["num_lidar_pts"][mask]
+        
+        # ⭐ 点数过滤逻辑开始 ⭐
+        if getattr(self, 'filter_gt_by_points', False):
+            keep_mask = np.ones(len(gt_names), dtype=bool)
+            for i in range(len(gt_names)):
+                cls = gt_names[i]
+                min_pts = self.class_min_points_dict.get(cls, 0)
+                if num_lidar_pts[i] < min_pts:
+                    keep_mask[i] = False
+
+            gt_names = gt_names[keep_mask]
+            gt_bboxes_3d = gt_bboxes_3d[keep_mask]
+            num_lidar_pts = num_lidar_pts[keep_mask]
+            # gt_labels_3d= gt_labels_3d[keep_mask]
+        # ⭐ 点数过滤逻辑结束 ⭐
         gt_labels_3d = []
-        for cat in gt_names_3d:
+        for cat in gt_names:
             if cat in self.CLASSES:
                 gt_labels_3d.append(self.CLASSES.index(cat))
             else:
@@ -555,7 +570,8 @@ class KLDataset(Custom3DDataset):
         anns_results = dict(
             gt_bboxes_3d=gt_bboxes_3d,
             gt_labels_3d=gt_labels_3d,
-            gt_names=gt_names_3d,
+            gt_names=gt_names,
+            num_lidar_pts=num_lidar_pts
         )
         return anns_results
     

@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug visualize.py",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/visualize.py",
+      "console": "integratedTerminal",
+      "args": [
+        "output/lidar_result/configs.yaml",
+        "--mode", "pred",
+        "--checkpoint", "output/lidar_result/latest.pth",
+        "--bbox-score", "0.2",
+        "--out-dir", "vis_result/camera_lidar_resnet50"
+      ],
+      "env": {
+        "MASTER_HOST": "127.0.0.1:29500",   // 注意加端口
+        "MASTER_PORT": "29500",
+        "WORLD_SIZE": "1",
+        "RANK": "0",
+        "LOCAL_RANK": "0"
+      }
+    }
+  ]
+}
