@@ -206,20 +206,20 @@ def create_groundtruth_database(
                     ENABLED=True,
                     FILTER_MIN_POINTS_BY_CLASS={
                         "Pedestrian": 5,
-                        "Car": 10,
+                        "Car": 50,
                         "IGV-Full": 10,
-                        "Truck": 10,
-                        "Trailer-Empty": 10,
-                        "Trailer-Full": 10,
-                        "IGV-Empty": 10,
-                        "Crane": 20,
+                        "Truck": 50,
+                        "Trailer-Empty": 50,
+                        "Trailer-Full": 50,
+                        "IGV-Empty": 50,
+                        "Crane": 50,
                         "OtherVehicle": 5,
                         "Cone": 5,
                         "ContainerForklift": 10,
                         "Forklift": 10,
                         "Lorry": 10,
                         "ConstructionVehicle": 5,
-                        "WheelCrane": 30
+                        "WheelCrane": 100
                     }
                 ),
             ),

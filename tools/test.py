@@ -95,6 +95,13 @@ def parse_args():
         help="job launcher",
     )
     parser.add_argument("--local_rank", type=int, default=0)
+    
+    parser.add_argument(
+        "--load-pkl",
+        type=str,
+        default=None,
+        help="如果指定了 pkl 文件路径，则直接加载结果进行评估，跳过模型推理",
+    )
     args = parser.parse_args()
     if "LOCAL_RANK" not in os.environ:
         os.environ["LOCAL_RANK"] = str(args.local_rank)
@@ -175,32 +182,66 @@ def main():
         shuffle=False,
     )
 
-    # build the model and load checkpoint
-    cfg.model.train_cfg = None
-    model = build_model(cfg.model, test_cfg=cfg.get("test_cfg"))
-    fp16_cfg = cfg.get("fp16", None)
-    if fp16_cfg is not None:
-        wrap_fp16_model(model)
-    checkpoint = load_checkpoint(model, args.checkpoint, map_location="cpu")
-    if args.fuse_conv_bn:
-        model = fuse_conv_bn(model)
-    # old versions did not save class info in checkpoints, this walkaround is
-    # for backward compatibility
-    if "CLASSES" in checkpoint.get("meta", {}):
-        model.CLASSES = checkpoint["meta"]["CLASSES"]
-    else:
-        model.CLASSES = dataset.CLASSES
+    # # build the model and load checkpoint
+    # cfg.model.train_cfg = None
+    # model = build_model(cfg.model, test_cfg=cfg.get("test_cfg"))
+    # fp16_cfg = cfg.get("fp16", None)
+    # if fp16_cfg is not None:
+    #     wrap_fp16_model(model)
+    # checkpoint = load_checkpoint(model, args.checkpoint, map_location="cpu")
+    # if args.fuse_conv_bn:
+    #     model = fuse_conv_bn(model)
+    # # old versions did not save class info in checkpoints, this walkaround is
+    # # for backward compatibility
+    # if "CLASSES" in checkpoint.get("meta", {}):
+    #     model.CLASSES = checkpoint["meta"]["CLASSES"]
+    # else:
+    #     model.CLASSES = dataset.CLASSES
 
-    if not distributed:
-        model = MMDataParallel(model, device_ids=[0])
-        outputs = single_gpu_test(model, data_loader)
+    # if not distributed:
+    #     model = MMDataParallel(model, device_ids=[0])
+    #     outputs = single_gpu_test(model, data_loader)
+    # else:
+    #     model = MMDistributedDataParallel(
+    #         model.cuda(),
+    #         device_ids=[torch.cuda.current_device()],
+    #         broadcast_buffers=False,
+    #     )
+    #     outputs = multi_gpu_test(model, data_loader, args.tmpdir, args.gpu_collect)
+
+    # --------------------------
+    # build the model and load checkpoint
+    # --------------------------
+    outputs = None
+    if args.load_pkl is not None:
+        # 直接加载 pkl
+        print(f"Loading results from {args.load_pkl} ...")
+        outputs = mmcv.load(args.load_pkl)
     else:
-        model = MMDistributedDataParallel(
-            model.cuda(),
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False,
-        )
-        outputs = multi_gpu_test(model, data_loader, args.tmpdir, args.gpu_collect)
+        # build the model and load checkpoint
+        cfg.model.train_cfg = None
+        model = build_model(cfg.model, test_cfg=cfg.get("test_cfg"))
+        fp16_cfg = cfg.get("fp16", None)
+        if fp16_cfg is not None:
+            wrap_fp16_model(model)
+        checkpoint = load_checkpoint(model, args.checkpoint, map_location="cpu")
+        if args.fuse_conv_bn:
+            model = fuse_conv_bn(model)
+        if "CLASSES" in checkpoint.get("meta", {}):
+            model.CLASSES = checkpoint["meta"]["CLASSES"]
+        else:
+            model.CLASSES = dataset.CLASSES
+
+        if not distributed:
+            model = MMDataParallel(model, device_ids=[0])
+            outputs = single_gpu_test(model, data_loader)
+        else:
+            model = MMDistributedDataParallel(
+                model.cuda(),
+                device_ids=[torch.cuda.current_device()],
+                broadcast_buffers=False,
+            )
+            outputs = multi_gpu_test(model, data_loader, args.tmpdir, args.gpu_collect)
 
     rank, _ = get_dist_info()
     if rank == 0:
@@ -223,6 +264,7 @@ def main():
             ]:
                 eval_kwargs.pop(key, None)
             eval_kwargs.update(dict(metric=args.eval, **kwargs))
+            
             print(dataset.evaluate(outputs, **eval_kwargs))
 
 

@@ -12,17 +12,35 @@ from ..bbox import LiDARInstance3DBoxes
 __all__ = ["visualize_camera", "visualize_lidar", "visualize_map"]
 
 
+# OBJECT_PALETTE = {
+#     "car": (255, 158, 0),
+#     "truck": (255, 99, 71),
+#     "construction_vehicle": (233, 150, 70),
+#     "bus": (255, 69, 0),
+#     "trailer": (255, 140, 0),
+#     "barrier": (112, 128, 144),
+#     "motorcycle": (255, 61, 99),
+#     "bicycle": (220, 20, 60),
+#     "pedestrian": (0, 0, 230),
+#     "traffic_cone": (47, 79, 79),
+# }
+
 OBJECT_PALETTE = {
-    "car": (255, 158, 0),
-    "truck": (255, 99, 71),
-    "construction_vehicle": (233, 150, 70),
-    "bus": (255, 69, 0),
-    "trailer": (255, 140, 0),
-    "barrier": (112, 128, 144),
-    "motorcycle": (255, 61, 99),
-    "bicycle": (220, 20, 60),
-    "pedestrian": (0, 0, 230),
-    "traffic_cone": (47, 79, 79),
+    "Pedestrian": (0, 0, 230),           # 蓝色
+    "Car": (255, 158, 0),                # 橙色
+    "IGV-Full": (255, 99, 71),           # 番茄红
+    "Truck": (233, 150, 70),             # 浅橙
+    "Trailer-Empty": (255, 140, 0),      # 深橙
+    "Trailer-Full": (255, 69, 0),        # 橙红
+    "IGV-Empty": (112, 128, 144),        # 灰色
+    "Crane": (160, 82, 45),              # 棕色
+    "OtherVehicle": (128, 0, 128),       # 紫色
+    "Cone": (47, 79, 79),                # 深灰绿
+    "ContainerForklift": (220, 20, 60),  # 猩红
+    "Forklift": (255, 61, 99),           # 粉红
+    "Lorry": (0, 128, 0),                # 绿色
+    "ConstructionVehicle": (0, 191, 255),# 深天蓝
+    "WheelCrane": (255, 215, 0),         # 金色
 }
 
 MAP_PALETTE = {
@@ -81,6 +99,13 @@ def visualize_camera(
         coords = coords[..., :2].reshape(-1, 8, 2)
         for index in range(coords.shape[0]):
             name = classes[labels[index]]
+
+            # -------- 获取颜色，容错处理 --------
+            if color is not None:
+                color_bgr = tuple(color[::-1])  # 传进来的 RGB 转 BGR
+            else:
+                # OBJECT_PALETTE 里没有就用绿色
+                color_bgr = tuple(OBJECT_PALETTE.get(name, (0, 255, 0))[::-1])
             for start, end in [
                 (0, 1),
                 (0, 3),
@@ -99,7 +124,7 @@ def visualize_camera(
                     canvas,
                     coords[index, start].astype(np.int),
                     coords[index, end].astype(np.int),
-                    color or OBJECT_PALETTE[name],
+                    color_bgr,
                     thickness,
                     cv2.LINE_AA,
                 )
@@ -122,6 +147,7 @@ def visualize_lidar(
     color: Optional[Tuple[int, int, int]] = None,
     radius: float = 15,
     thickness: float = 25,
+    show_axis: bool = True,
 ) -> None:
     fig = plt.figure(figsize=(xlim[1] - xlim[0], ylim[1] - ylim[0]))
 
@@ -141,14 +167,64 @@ def visualize_lidar(
 
     if bboxes is not None and len(bboxes) > 0:
         coords = bboxes.corners[:, [0, 3, 7, 4, 0], :2]
+        # coords = bboxes.corners[:, [1, 2, 6, 5, 1], :2]
+        centers = bboxes.gravity_center[:, :2]  # 中心点
+        yaws = bboxes.yaw                       # 朝向角 (弧度)
         for index in range(coords.shape[0]):
             name = classes[labels[index]]
+            # color_rgb = np.array(color or OBJECT_PALETTE[name]) / 255
+            # -------- 获取颜色，容错处理 --------
+            if color is not None:
+                color_rgb = np.array(color) / 255.0
+            else:
+                color_rgb = np.array(OBJECT_PALETTE.get(name, (0, 255, 0))) / 255.0
             plt.plot(
                 coords[index, :, 0],
                 coords[index, :, 1],
                 linewidth=thickness,
                 color=np.array(color or OBJECT_PALETTE[name]) / 255,
             )
+            
+            # ------- 朝向箭头 -------
+            cx, cy = centers[index]
+            yaw = -yaws[index]
+
+            arrow_len = max(bboxes.tensor[index, 3:5]) * 0.5  # 箭头长度取长宽的一半
+            dx = arrow_len * np.cos(yaw)
+            dy = arrow_len * np.sin(yaw)
+
+            plt.arrow(
+                cx, cy, dx, dy,
+                color=color_rgb,
+                width=0.2,
+                head_width=1.0,
+                head_length=1.5,
+                length_includes_head=True,
+            )
+
+    # ---------- 绘制坐标轴 ----------
+    if show_axis:
+        # 原点在 (0,0) 或点云中心
+        origin = np.array([0.0, 0.0])
+        ax_len = min(xlim[1] - xlim[0], ylim[1] - ylim[0]) * 0.05  # 轴长度占画布 5%
+
+        # x 轴 (红色)
+        ax.arrow(
+            origin[0], origin[1], ax_len, 0,
+            color="red", width=0.2, head_width=ax_len*0.2, length_includes_head=True
+        )
+        ax.text(origin[0]+ax_len, origin[1], "X", color="red", fontsize=12, weight='bold')
+
+        # y 轴 (绿色)
+        ax.arrow(
+            origin[0], origin[1], 0, ax_len,
+            color="green", width=0.2, head_width=ax_len*0.2, length_includes_head=True
+        )
+        ax.text(origin[0], origin[1]+ax_len, "Y", color="green", fontsize=12, weight='bold')
+
+        # z 轴 (蓝色) 注释
+        ax.text(origin[0]-ax_len*0.3, origin[1]-ax_len*0.3, "Z ↑", color="blue", fontsize=12, weight='bold')
+
 
     mmcv.mkdir_or_exist(os.path.dirname(fpath))
     fig.savefig(

@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "Debug visualize.py",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/tools/visualize.py",
       "console": "integratedTerminal",

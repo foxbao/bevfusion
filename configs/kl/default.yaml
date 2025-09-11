@@ -63,20 +63,20 @@ custom_cfg:
     ENABLED: True
     FILTER_MIN_POINTS_BY_CLASS:
       Pedestrian: 5
-      Car: 10
+      Car: 50
       IGV-Full: 10
-      Truck: 10
-      Trailer-Empty: 10
-      Trailer-Full: 10
-      IGV-Empty: 10
-      Crane: 20
+      Truck: 50
+      Trailer-Empty: 50
+      Trailer-Full: 50
+      IGV-Empty: 50
+      Crane: 50
       OtherVehicle: 5
       Cone: 5
       ContainerForklift: 10
       Forklift: 10
       Lorry: 10
       ConstructionVehicle: 5
-      WheelCrane: 30
+      WheelCrane: 100
   # eval_cfg:
   #   class_range:
   #     Pedestrian: 50
@@ -138,20 +138,20 @@ train_pipeline:
         filter_by_difficulty: [-1]
         filter_by_min_points:
           Pedestrian: 5
-          Car: 5
-          IGV-Full: 5
-          Truck: 5
-          Trailer-Empty: 5
-          Trailer-Full: 5
-          IGV-Empty: 5
-          Crane: 5
+          Car: 50
+          IGV-Full: 10
+          Truck: 50
+          Trailer-Empty: 50
+          Trailer-Full: 50
+          IGV-Empty: 50
+          Crane: 50
           OtherVehicle: 5
           Cone: 5
           ContainerForklift: 5
           Forklift: 5
           Lorry: 5
           ConstructionVehicle: 5
-          WheelCrane: 5
+          WheelCrane: 100
       classes: ${object_classes}
       sample_groups:
         Pedestrian: 5

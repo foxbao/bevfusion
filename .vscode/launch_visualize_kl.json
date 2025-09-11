@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "Debug visualize.py",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/tools/visualize.py",
       "console": "integratedTerminal",
@@ -12,8 +12,9 @@
         "--mode", "pred",
         "--checkpoint", "output/lidar_result/latest.pth",
         "--bbox-score", "0.2",
-        "--out-dir", "vis_result/camera_lidar_resnet50"
+        "--out-dir", "vis_result/lidar_result"
       ],
+      "justMyCode": false,
       "env": {
         "MASTER_HOST": "127.0.0.1:29500",   // 注意加端口
         "MASTER_PORT": "29500",

@@ -201,6 +201,27 @@ def transform_points(point_cloud, extrinsic):
     point_cloud[:, :3] = transformed_positions
     return point_cloud
 
+def convert_yaw_to_mmdet3d(bboxes: np.ndarray) -> np.ndarray:
+    """
+    Convert 3D boxes yaw to mmdet3d LiDAR coordinate system.
+    Does not modify z coordinate.
+
+    Args:
+        bboxes: np.ndarray, shape [N, 7+] (x, y, z, l, w, h, yaw, ...)
+
+    Returns:
+        bboxes with yaw converted
+    """
+    if bboxes is None or len(bboxes) == 0:
+        return bboxes
+
+    bboxes = bboxes.copy()  # 避免修改原数组
+    yaw_orig = bboxes[..., 6]
+    yaw_mmdet3d = - yaw_orig
+    yaw_mmdet3d = (yaw_mmdet3d + np.pi) % (2 * np.pi) - np.pi
+    bboxes[..., 6] = yaw_mmdet3d
+    return bboxes
+
 
 @DATASETS.register_module()
 class KLDataset(Custom3DDataset):
@@ -519,8 +540,9 @@ class KLDataset(Custom3DDataset):
         return data
     
     def get_ann_info(self, index):
+
         info = self.data_infos[index]
-        
+
         if self.use_valid_flag:
             mask = info["valid_flag"]
         else:
@@ -563,6 +585,11 @@ class KLDataset(Custom3DDataset):
         # the nuscenes box center is [0.5, 0.5, 0.5], we change it to be
         # the same as KITTI (0.5, 0.5, 0)
         # haotian: this is an important change: from 0.5, 0.5, 0.5 -> 0.5, 0.5, 0
+        
+
+        # --------- yaw转换到 mmdet3d 坐标系 ---------
+        gt_bboxes_3d = convert_yaw_to_mmdet3d(gt_bboxes_3d)
+        # ------------------------------------------
         gt_bboxes_3d = LiDARInstance3DBoxes(
             gt_bboxes_3d, box_dim=gt_bboxes_3d.shape[-1], origin=(0.5, 0.5, 0)
         ).convert_to(self.box_mode_3d)
@@ -575,10 +602,12 @@ class KLDataset(Custom3DDataset):
         )
         return anns_results
     
-    def evaluate(self, results, metric=None, iou_thr=0.5, logger=None, **kwargs):
+    def evaluate_slow(self, results, metric=None, iou_thr=0.5, logger=None, **kwargs):
+        print("Evaluating...")
         preds, gts = defaultdict(list), defaultdict(list)
 
         # ==== 整理预测 ====
+        print("整理预测")
         for i, res in enumerate(results):
             frame_id = self.data_infos[i]['token']
             boxes = res['boxes_3d'].tensor.cpu()   # (N, 7)
@@ -592,6 +621,7 @@ class KLDataset(Custom3DDataset):
                 })
 
         # ==== 整理GT ====
+        print("整理GT")
         for i, info in enumerate(self.data_infos):
             frame_id = info['token']
             annos = self.get_ann_info(i)
@@ -665,4 +695,113 @@ class KLDataset(Custom3DDataset):
         print("==========================================\n")
 
         return results_eval
+    
+    def evaluate(self, results, eval_metric='kitti', iou_thr=0.5, batch_size=5000, verbose=True, **kwargs):
+        import torch
+        from collections import defaultdict
 
+        all_preds = defaultdict(lambda: {"boxes": [], "scores": []})
+        all_gts   = defaultdict(lambda: {"boxes": []})
+
+        # ==== 整理预测 ====
+        for i, res in enumerate(results):
+            for cls_idx, cls_name in enumerate(self.CLASSES):
+                mask = res['labels_3d'].cpu().numpy() == cls_idx
+                boxes = res['boxes_3d'].tensor.cpu()[mask]
+                scores = res['scores_3d'].cpu()[mask]
+                if len(boxes) > 0:
+                    all_preds[cls_name]["boxes"].append(boxes)
+                    all_preds[cls_name]["scores"].append(scores)
+
+        # ==== 整理GT ====
+        for i, info in enumerate(self.data_infos):
+            annos = self.get_ann_info(i)
+            for cls_idx, cls_name in enumerate(self.CLASSES):
+                mask = annos['gt_labels_3d'] == cls_idx
+                boxes = annos['gt_bboxes_3d'].tensor.cpu()[mask]
+                if len(boxes) > 0:
+                    all_gts[cls_name]["boxes"].append(boxes)
+
+        results_eval = {}
+
+        # ==== IoU 计算器 ====
+        iou_calculators = {
+            "3D": BboxOverlaps3D("lidar"),
+            "BEV": BboxOverlapsNearest3D("lidar"),
+            "AxisAligned": AxisAlignedBboxOverlaps3D()
+        }
+
+        for cls_name in self.CLASSES:
+            if len(all_preds[cls_name]["boxes"]) == 0:
+                continue
+
+            # 合并帧
+            pred_boxes = torch.cat(all_preds[cls_name]["boxes"], dim=0)
+            pred_scores = torch.cat(all_preds[cls_name]["scores"], dim=0)
+            gt_boxes = torch.cat(all_gts[cls_name]["boxes"], dim=0) if all_gts[cls_name]["boxes"] else torch.empty((0,7))
+
+            # 按分数降序
+            scores_sort = torch.argsort(pred_scores, descending=True)
+            pred_boxes = pred_boxes[scores_sort]
+            pred_scores = pred_scores[scores_sort]
+
+            for iou_name, iou_calculator in iou_calculators.items():
+                tp = torch.zeros(len(pred_boxes))
+                fp = torch.zeros(len(pred_boxes))
+                gt_used = torch.zeros(len(gt_boxes), dtype=torch.bool)
+
+                # ==== 分批计算 IoU ====
+                for start in range(0, len(pred_boxes), batch_size):
+                    end = min(start + batch_size, len(pred_boxes))
+                    batch_pred = pred_boxes[start:end].cuda()
+
+                    if len(gt_boxes) > 0:
+                        batch_gt = gt_boxes.cuda()
+                        # AxisAligned 只用前6维
+                        if iou_name == "AxisAligned":
+                            batch_pred_ = batch_pred[:, :6]
+                            batch_gt_ = batch_gt[:, :6]
+                        else:
+                            batch_pred_ = batch_pred
+                            batch_gt_ = batch_gt
+
+                        ious = iou_calculator(batch_pred_, batch_gt_, mode="iou").cpu()
+                    else:
+                        ious = torch.zeros((end-start, 0))
+
+                    # ==== 匹配 TP/FP ====
+                    for k in range(end-start):
+                        if ious.shape[1] == 0 or (~gt_used).sum() == 0:
+                            fp[start+k] = 1
+                            continue
+
+                        iou_row = ious[k].clone()
+                        iou_row[gt_used] = -1
+                        max_idx = torch.argmax(iou_row)
+                        if iou_row[max_idx] >= iou_thr:
+                            tp[start+k] = 1
+                            gt_used[max_idx] = True
+                        else:
+                            fp[start+k] = 1
+
+                # ==== 计算 AP ====
+                tp_cum = torch.cumsum(tp, dim=0).numpy()
+                fp_cum = torch.cumsum(fp, dim=0).numpy()
+                recall = tp_cum / (len(gt_boxes) + 1e-6)
+                precision = tp_cum / (tp_cum + fp_cum + 1e-6)
+                ap = compute_ap(recall, precision)
+                results_eval[f"{cls_name}_AP_{iou_name}"] = ap
+
+        # ==== 美化输出 ====
+        if verbose:
+            print("\n===== KITTI-style Evaluation Results =====")
+            print(f"IoU Threshold: {iou_thr}")
+            print(f"{'Class':<20} {'3D AP':<10} {'BEV AP':<10} {'AxisAligned AP':<15}")
+            for cls in self.CLASSES:
+                ap3d  = results_eval.get(f"{cls}_AP_3D", 0)
+                apbev = results_eval.get(f"{cls}_AP_BEV", 0)
+                apax  = results_eval.get(f"{cls}_AP_AxisAligned", 0)
+                print(f"{cls:<20} {ap3d:<10.4f} {apbev:<10.4f} {apax:<15.4f}")
+            print("==========================================\n")
+
+        return results_eval

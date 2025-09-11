@@ -10,11 +10,14 @@
       "args": [
         "configs/kl/det/transfusion/secfpn/lidar/voxelnet_0p075.yaml",
         "output/lidar_result/latest.pth",
-        "--eval","bbox"
+        "--eval","bbox",
+        // "--out","output/lidar_result/result.pkl",
+        // "--load-pkl","output/lidar_result/result.pkl"
       ],
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "env": {
+        "CUDA_VISIBLE_DEVICES": "6" ,
         "MASTER_HOST": "127.0.0.1:29500",   // 注意加端口
         "MASTER_PORT": "29500",
         "WORLD_SIZE": "1",
