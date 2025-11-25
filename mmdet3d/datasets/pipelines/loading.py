@@ -57,13 +57,22 @@ class LoadMultiViewImageFromFiles:
         # for name in filename:
         #     images.append(Image.open(name))
 
-        # 尝试读取真实图片，失败时生成黑图
+        # 尝试读取真实图片，随机噪声图像
         for name in filename:
             try:
                 img = Image.open(name)
+                # img = Image.new("RGB", (1920, 1536), (0, 0, 0))
+                # 随机噪声图像，数值很小即可
+                # H, W = 1600, 900
+                # img_array = (np.random.rand(H, W, 3) * 1e-3 * 255).astype(np.uint8)
+                # img = Image.fromarray(img_array)
             except Exception:
                 # 图片缺失或读取失败，生成黑图
-                img = Image.new("RGB", (1280, 720), (0, 0, 0))
+                # img = Image.new("RGB", (1920, 1536), (0, 0, 0))
+                # 随机噪声图像，数值很小即可
+                H, W = 1600, 900
+                img_array = (np.random.rand(H, W, 3) * 1e-3 * 255).astype(np.uint8)
+                img = Image.fromarray(img_array)
             images.append(img)
         
         #TODO: consider image padding in waymo

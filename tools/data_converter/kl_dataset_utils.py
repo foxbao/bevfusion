@@ -3,101 +3,21 @@ The NuScenes data pre-processing and evaluation is modified from
 https://github.com/traveller59/second.pytorch and https://github.com/poodarchu/Det3D
 """
 
-import operator
-from functools import reduce
+# import operator
+# from functools import reduce
 from pathlib import Path
 
 import numpy as np
 import tqdm
 from nuscenes.utils.data_classes import Box
-from nuscenes.utils.geometry_utils import transform_matrix
+# from nuscenes.utils.geometry_utils import transform_matrix
 from pyquaternion import Quaternion
 from typing import List, Tuple
 import json
-import os
-from bisect import bisect_left
+# import os
+# from bisect import bisect_left
 from .kl import KL
 
-def get_available_scenes(nusc):
-    """
-    获取可用的场景。
-    :param nusc: NuScenes 数据集类。
-    :return: 可用的场景列表。
-    """
-    available_scenes = []
-    print('total scene num:', len(nusc.scene))
-    for scene in nusc.scene:
-        scene_token = scene['token']
-        scene_rec = nusc.get('scene', scene_token)
-        sample_rec = nusc.get('sample', scene_rec['first_sample_token'])
-        sd_rec = nusc.get('sample_data', sample_rec['data']['LIDAR_TOP'])
-        has_more_frames = True
-        scene_not_exist = False
-        while has_more_frames:
-            lidar_path, boxes, _ = nusc.get_sample_data(sd_rec['token'])
-            if not Path(lidar_path).exists():
-                scene_not_exist = True
-                break
-            else:
-                break
-            # if not sd_rec['next'] == '':
-            #     sd_rec = nusc.get('sample_data', sd_rec['next'])
-            # else:
-            #     has_more_frames = False
-        if scene_not_exist:
-            continue
-        available_scenes.append(scene)
-    print('exist scene num:', len(available_scenes))
-    return available_scenes
-
-
-def get_sample_data(nusc, sample_data_token, selected_anntokens=None):
-    """
-    Returns the data path as well as all annotations related to that sample_data.
-    Note that the boxes are transformed into the current sensor's coordinate frame.
-    Args:
-        nusc:
-        sample_data_token: Sample_data token.
-        selected_anntokens: If provided only return the selected annotation.
-
-    Returns:
-
-    """
-    # Retrieve sensor & pose records
-    sd_record = nusc.get('sample_data', sample_data_token)
-    cs_record = nusc.get('calibrated_sensor', sd_record['calibrated_sensor_token'])
-    sensor_record = nusc.get('sensor', cs_record['sensor_token'])
-    pose_record = nusc.get('ego_pose', sd_record['ego_pose_token'])
-
-    data_path = nusc.get_sample_data_path(sample_data_token)
-
-    if sensor_record['modality'] == 'camera':
-        cam_intrinsic = np.array(cs_record['camera_intrinsic'])
-        imsize = (sd_record['width'], sd_record['height'])
-    else:
-        cam_intrinsic = imsize = None
-
-    # Retrieve all sample annotations and map to sensor coordinate system.
-    if selected_anntokens is not None:
-        boxes = list(map(nusc.get_box, selected_anntokens))
-    else:
-        boxes = nusc.get_boxes(sample_data_token)
-
-    # Make list of Box objects including coord system transforms.
-    box_list = []
-    for box in boxes:
-        box.velocity = nusc.box_velocity(box.token)
-        # Move box to ego vehicle coord system
-        box.translate(-np.array(pose_record['translation']))
-        box.rotate(Quaternion(pose_record['rotation']).inverse)
-
-        #  Move box to sensor coord system
-        box.translate(-np.array(cs_record['translation']))
-        box.rotate(Quaternion(cs_record['rotation']).inverse)
-
-        box_list.append(box)
-
-    return data_path, box_list, cam_intrinsic
 
 
 def quaternion_yaw(q: Quaternion) -> float:
@@ -117,86 +37,6 @@ def quaternion_yaw(q: Quaternion) -> float:
 
     return yaw
     
-
-def obtain_sensor2top(
-    nusc, sensor_token, l2e_t, l2e_r_mat, e2g_t, e2g_r_mat, sensor_type="lidar"
-):
-    """Obtain the info with RT matric from general sensor to Top LiDAR.
-
-    Args:
-        nusc (class): Dataset class in the nuScenes dataset.
-        sensor_token (str): Sample data token corresponding to the
-            specific sensor type.
-        l2e_t (np.ndarray): Translation from lidar to ego in shape (1, 3).
-        l2e_r_mat (np.ndarray): Rotation matrix from lidar to ego
-            in shape (3, 3).
-        e2g_t (np.ndarray): Translation from ego to global in shape (1, 3).
-        e2g_r_mat (np.ndarray): Rotation matrix from ego to global
-            in shape (3, 3).
-        sensor_type (str): Sensor to calibrate. Default: 'lidar'.
-
-    Returns:
-        sweep (dict): Sweep information after transformation.
-    """
-    sd_rec = nusc.get("sample_data", sensor_token)
-    cs_record = nusc.get("calibrated_sensor", sd_rec["calibrated_sensor_token"])
-    pose_record = nusc.get("ego_pose", sd_rec["ego_pose_token"])
-    data_path = str(nusc.get_sample_data_path(sd_rec["token"]))
-    # if os.getcwd() in data_path:  # path from lyftdataset is absolute path
-    #     data_path = data_path.split(f"{os.getcwd()}/")[-1]  # relative path
-    sweep = {
-        "data_path": data_path,
-        "type": sensor_type,
-        "sample_data_token": sd_rec["token"],
-        "sensor2ego_translation": cs_record["translation"],
-        "sensor2ego_rotation": cs_record["rotation"],
-        "ego2global_translation": pose_record["translation"],
-        "ego2global_rotation": pose_record["rotation"],
-        "timestamp": sd_rec["timestamp"],
-    }
-    l2e_r_s = sweep["sensor2ego_rotation"]
-    l2e_t_s = sweep["sensor2ego_translation"]
-    e2g_r_s = sweep["ego2global_rotation"]
-    e2g_t_s = sweep["ego2global_translation"]
-
-    # obtain the RT from sensor to Top LiDAR
-    # sweep->ego->global->ego'->lidar
-    l2e_r_s_mat = Quaternion(l2e_r_s).rotation_matrix
-    e2g_r_s_mat = Quaternion(e2g_r_s).rotation_matrix
-    R = (l2e_r_s_mat.T @ e2g_r_s_mat.T) @ (
-        np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(l2e_r_mat).T
-    )
-    T = (l2e_t_s @ e2g_r_s_mat.T + e2g_t_s) @ (
-        np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(l2e_r_mat).T
-    )
-    T -= (
-        e2g_t @ (np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(l2e_r_mat).T)
-        + l2e_t @ np.linalg.inv(l2e_r_mat).T
-    ).squeeze(0)
-    sweep["sensor2lidar_rotation"] = R.T  # points @ R.T + T
-    sweep["sensor2lidar_translation"] = T
-    return sweep
-
-# # 查找最近的点云文件
-# def find_nearest_pointcloud(timestamp, pointcloud_files, pointcloud_timestamps=None):
-#     """
-#     根据时间戳查找最近的点云文件。
-#     :param timestamp: 标注文件的时间戳（整数或字符串）
-#     :param pointcloud_files: 点云文件列表（Path 对象）
-#     :param pointcloud_timestamps: 预计算的时间戳列表（可选）
-#     :return: 最近的点云文件路径（字符串）
-#     """
-#     timestamp = int(timestamp)  # 确保时间戳是整数
-
-#     # 如果没有预计算时间戳，则实时计算
-#     if pointcloud_timestamps is None:
-#         pointcloud_timestamps = [int(f.stem) for f in pointcloud_files]
-
-#     # 使用 NumPy 计算最小差值
-#     diffs = np.abs(np.array(pointcloud_timestamps) - timestamp)
-#     nearest_index = np.argmin(diffs)
-#     return str(pointcloud_files[nearest_index])
-
 
 def quaternion_to_yaw(rotation)->float:
     """
@@ -228,21 +68,6 @@ def convert_to_gt_boxes_7dof(xyz, lwh, rotation):
 
     gt_boxes = np.concatenate([xyz, lwh, [yaw]])
     return gt_boxes
-
-
-# def convert_to_gt_boxes_7dof(xyz, lwh, rotation):
-#     # 确保输入是 numpy 数组
-#     xyz = np.asarray(xyz)
-#     lwh = np.asarray(lwh)
-#     rotation = np.asarray(rotation)
-    
-#     # 将四元数转换为偏航角
-#     yaw = quaternion_to_yaw(rotation)
-    
-#     # 将 xyz, lwh, yaw 拼接成 gt_boxes
-#     gt_boxes = np.concatenate([xyz, lwh, [yaw]])
-    
-#     return gt_boxes
 
 
 def convert_json_to_annotations(json_data:List[dict]):
@@ -377,59 +202,36 @@ def fill_trainval_infos(kl:KL,train_samples,val_samples,test_samples):
         # if not sample['cameras']:
         #     continue
         
-        for camera_type,data_path in sample['cameras'].items():
-            camera_info=dict()
-            camera_info['data_path'] = data_path
-            camera_info["sensor2lidar_rotation"] = np.array([
-                [1.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
-                [0.0, 0.0, 1.0]
-            ], dtype=np.float32)
-            camera_info["sensor2lidar_translation"] = np.array([0.5, 0.0, -1.5], dtype=np.float32)
-            camera_info["camera_intrinsics"] = np.array([
-                [1200.0, 0.0,   800.0],
-                [0.0,   1200.0, 600.0],
-                [0.0,      0.0,   1.0]
-            ], dtype=np.float32)
-            camera_info["sensor2ego_rotation"] = [0.9659, 0.0, 0.2588, 0.0]  # yaw = 30°
-            camera_info["sensor2ego_translation"] = np.array([1.5, 0.0, 1.2], dtype=np.float32)
-
-            info["cams"].update({camera_type: camera_info})
-            
-        # camera_types = [
-        #     "CAM_FRONT",
-        #     "CAM_FRONT_RIGHT",
-        #     "CAM_FRONT_LEFT",
-        #     "CAM_BACK",
-        #     "CAM_BACK_LEFT",
-        #     "CAM_BACK_RIGHT",
-        # ]
+        # ---------- cameras ----------
         
-        # for cam in camera_types:
-        #     # cam_token = sample["data"][cam]
-        #     # cam_path, _, camera_intrinsics = nusc.get_sample_data(cam_token)
-            
-            
-        #     cam_info = obtain_sensor2top(
-        #         nusc, cam_token, l2e_t, l2e_r_mat, e2g_t, e2g_r_mat, cam
-        #     )
-        #     cam_info.update(camera_intrinsics=camera_intrinsics)
-        #     info["cams"].update({cam: cam_info})
+        # ===== 全局相机配置 =====
+        CAMERA_WIDTH = 1920
+        CAMERA_HEIGHT = 1536
+        FOCAL_LENGTH = 1200.0  # 默认焦距，可按需修改
 
-        # with open(sample['intrinsics_path'], 'r', encoding='utf-8') as f:
-        #     intrinsice_data = json.load(f)
-        # with open(sample['localization'], 'r', encoding='utf-8') as f:
-        #     state=json.load(f)
-        # 为每个样本添加 timestamp、token 和 pointcloud_path
+        # 默认 pinhole 内参（未提供真实标定时使用）
+        DEFAULT_INTRINSICS = np.array([
+            [FOCAL_LENGTH,       0.0, CAMERA_WIDTH / 2.0],
+            [0.0,          FOCAL_LENGTH, CAMERA_HEIGHT / 2.0],
+            [0.0,                0.0,              1.0]
+        ], dtype=np.float32)
 
+        for camera_type, data_path in sample['cameras'].items():
+            # if camera_type not in VALID_CAMERA_TYPES:
+            #     continue  # 跳过无效相机
+            camera_info = dict()
+            camera_info['data_path'] = data_path
+            camera_info["sensor2lidar_rotation"] = np.eye(3, dtype=np.float32)
+            camera_info["sensor2lidar_translation"] = np.array([0.5, 0.0, -1.5], dtype=np.float32)
 
-        # gt_boxes增加速度
-        # gt_boxes=info['gt_boxes']
-        # locs = gt_boxes[:, :3]
-        # dims = gt_boxes[:, 3:6]
-        # rots = gt_boxes[:, 6].reshape(-1, 1)
-        # velocity = np.zeros((gt_boxes.shape[0], 2))
-        # info['gt_boxes'] = np.concatenate([locs, dims, rots, velocity], axis=1)
+            # 默认用全局 intrinsics，如果 sample 提供了，就覆盖
+            camera_info["camera_intrinsics"] = intrinsice_data.get(
+                camera_type, DEFAULT_INTRINSICS
+            )
+            camera_info["sensor2ego_rotation"] = [1.0, 0.0, 0.0, 0.0]
+            camera_info["sensor2ego_translation"] = np.array([1.5, 0.0, 1.2], dtype=np.float32)
+            info["cams"].update({camera_type: camera_info})
+
         if sample['token'] in train_samples:
             train_kl_infos.append(info)
         elif sample['token'] in val_samples:
@@ -460,75 +262,6 @@ def boxes_lidar_to_nusenes(det_info):
         box_list.append(box)
     return box_list
 
-
-def lidar_nusc_box_to_global(nusc, boxes, sample_token):
-    s_record = nusc.get('sample', sample_token)
-    sample_data_token = s_record['data']['LIDAR_TOP']
-
-    sd_record = nusc.get('sample_data', sample_data_token)
-    cs_record = nusc.get('calibrated_sensor', sd_record['calibrated_sensor_token'])
-    sensor_record = nusc.get('sensor', cs_record['sensor_token'])
-    pose_record = nusc.get('ego_pose', sd_record['ego_pose_token'])
-
-    data_path = nusc.get_sample_data_path(sample_data_token)
-    box_list = []
-    for box in boxes:
-        # Move box to ego vehicle coord system
-        box.rotate(Quaternion(cs_record['rotation']))
-        box.translate(np.array(cs_record['translation']))
-        # Move box to global coord system
-        box.rotate(Quaternion(pose_record['rotation']))
-        box.translate(np.array(pose_record['translation']))
-        box_list.append(box)
-    return box_list
-
-
-def transform_det_annos_to_nusc_annos(det_annos, nusc):
-    nusc_annos = {
-        'results': {},
-        'meta': None,
-    }
-
-    for det in det_annos:
-        annos = []
-        box_list = boxes_lidar_to_nusenes(det)
-        box_list = lidar_nusc_box_to_global(
-            nusc=nusc, boxes=box_list, sample_token=det['metadata']['token']
-        )
-
-        for k, box in enumerate(box_list):
-            name = det['name'][k]
-            if np.sqrt(box.velocity[0] ** 2 + box.velocity[1] ** 2) > 0.2:
-                if name in ['car', 'construction_vehicle', 'bus', 'truck', 'trailer']:
-                    attr = 'vehicle.moving'
-                elif name in ['bicycle', 'motorcycle']:
-                    attr = 'cycle.with_rider'
-                else:
-                    attr = None
-            else:
-                if name in ['pedestrian']:
-                    attr = 'pedestrian.standing'
-                elif name in ['bus']:
-                    attr = 'vehicle.stopped'
-                else:
-                    attr = None
-            attr = attr if attr is not None else max(
-                cls_attr_dist[name].items(), key=operator.itemgetter(1))[0]
-            nusc_anno = {
-                'sample_token': det['metadata']['token'],
-                'translation': box.center.tolist(),
-                'size': box.wlh.tolist(),
-                'rotation': box.orientation.elements.tolist(),
-                'velocity': box.velocity[:2].tolist(),
-                'detection_name': name,
-                'detection_score': box.score,
-                'attribute_name': attr
-            }
-            annos.append(nusc_anno)
-
-        nusc_annos['results'].update({det["metadata"]["token"]: annos})
-
-    return nusc_annos
 
 
 def format_nuscene_results(metrics, class_names, version='default'):

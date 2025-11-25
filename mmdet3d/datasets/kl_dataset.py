@@ -304,12 +304,12 @@ class KLDataset(Custom3DDataset):
         self.fixed_cams = [
             # "h100f1a_front_left",
             # "h100f1a_rear_right",
-            "h120ua_front_left",
+            # "h120ua_front_left",
             "h120ua_front_mid",
-            "h120ua_front_right",
-            "h120ua_rear_left",
-            "h120ua_rear_mid",
-            "h120ua_rear_right"
+            # "h120ua_front_right",
+            # "h120ua_rear_left",
+            # "h120ua_rear_mid",
+            # "h120ua_rear_right"
         ]
         
     def get_merged_lidar(self,index,use_extrinsic=True)->np.ndarray:
@@ -440,36 +440,43 @@ class KLDataset(Custom3DDataset):
                 if cam_name in info["cams"]:
                     camera_info = info["cams"][cam_name]
 
+                    # --- 图像路径 ---
                     data["image_paths"].append(camera_info["data_path"])
-                    # lidar -> camera
+
+                    # --- lidar -> camera ---
                     lidar2camera_r = np.linalg.inv(camera_info["sensor2lidar_rotation"])
-                    lidar2camera_t = (
-                        camera_info["sensor2lidar_translation"] @ lidar2camera_r.T
-                    )
-                    lidar2camera_rt = np.eye(4).astype(np.float32)
+                    lidar2camera_t = camera_info["sensor2lidar_translation"] @ lidar2camera_r.T
+
+                    lidar2camera_rt = np.eye(4, dtype=np.float32)
                     lidar2camera_rt[:3, :3] = lidar2camera_r.T
                     lidar2camera_rt[3, :3] = -lidar2camera_t
                     data["lidar2camera"].append(lidar2camera_rt.T)
-
-                    # camera intrinsics
+                    
+                    # camera intrinsics（假设 1920x1080 图像）
+                    fx = 1024.937295
+                    fy = 1019.922516
+                    cx, cy = 957.699767, 787.995176
                     camera_intrinsics = np.eye(4).astype(np.float32)
-                    camera_intrinsics[:3, :3] = camera_info["camera_intrinsics"]
+                    camera_intrinsics[0, 0] = fx
+                    camera_intrinsics[1, 1] = fy
+                    camera_intrinsics[0, 2] = cx
+                    camera_intrinsics[1, 2] = cy
                     data["camera_intrinsics"].append(camera_intrinsics)
 
-                    # lidar -> image
+                    # --- lidar -> image ---
                     lidar2image = camera_intrinsics @ lidar2camera_rt.T
                     data["lidar2image"].append(lidar2image)
 
-                    # camera -> ego
-                    camera2ego = np.eye(4).astype(np.float32)
+                    # --- camera -> ego ---
+                    camera2ego = np.eye(4, dtype=np.float32)
                     camera2ego[:3, :3] = Quaternion(
                         camera_info["sensor2ego_rotation"]
                     ).rotation_matrix
                     camera2ego[:3, 3] = camera_info["sensor2ego_translation"]
                     data["camera2ego"].append(camera2ego)
 
-                    # camera -> lidar
-                    camera2lidar = np.eye(4).astype(np.float32)
+                    # --- camera -> lidar ---
+                    camera2lidar = np.eye(4, dtype=np.float32)
                     camera2lidar[:3, :3] = camera_info["sensor2lidar_rotation"]
                     camera2lidar[:3, 3] = camera_info["sensor2lidar_translation"]
                     data["camera2lidar"].append(camera2lidar)

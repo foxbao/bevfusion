@@ -10,7 +10,7 @@
       "args": [
         "configs/nuscenes/det/transfusion/secfpn/camera_lidar/resnet50/convfuser.yaml",
         "--run-dir",
-        "output/camera_lidar_resnet50/"
+        "output/camera_lidar_resnet50_nus/"
       ],
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
@@ -20,7 +20,7 @@
         "MASTER_PORT": "29500",
         "WORLD_SIZE": "1",
         "RANK": "0",
-        "LOCAL_RANK": "0"
+        // "LOCAL_RANK": "0"
       }
     }
   ]

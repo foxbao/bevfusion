@@ -8,14 +8,15 @@
       "program": "tools/train.py",
       "console": "integratedTerminal",
       "args": [
-        "configs/nuscenes/det/transfusion/secfpn/lidar/voxelnet_0p075.yaml",
+        "configs/kl/det/transfusion/secfpn/camera_lidar/resnet50/convfuser.yaml",
         "--run-dir",
-        "output/debug_run_nus/"
+        "output/camera_lidar_resnet50/"
       ],
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "env": {
-        "MASTER_HOST": "127.0.0.1:29500",
+        "CUDA_VISIBLE_DEVICES": "0",
+        "MASTER_HOST": "127.0.0.1:29500", 
         "MASTER_PORT": "12345",
         "RANK": "0",
         "WORLD_SIZE": "1"

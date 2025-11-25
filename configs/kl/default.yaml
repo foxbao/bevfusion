@@ -339,6 +339,6 @@ data:
     custom_cfg: ${custom_cfg}
 
 evaluation:
-  interval: 5
+  interval: 10
   pipeline: ${test_pipeline}
  

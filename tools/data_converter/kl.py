@@ -22,8 +22,8 @@ class KL():
             'bp_rear_left':'bp_rear_left',
             'bp_rear_right':'bp_rear_right'}
         self.camera_names={
-            'h100f1a_front_left':'h100f1a_front_left',
-            'h100f1a_rear_right':'h100f1a_rear_right',
+            # 'h100f1a_front_left':'h100f1a_front_left',
+            # 'h100f1a_rear_right':'h100f1a_rear_right',
             'h120ua_front_left':'h120ua_front_left',
             'h120ua_front_mid':'h120ua_front_mid',
             'h120ua_front_right':'h120ua_front_right',
@@ -73,11 +73,19 @@ class KL():
                         
                         camera_files={}
                         camera_timestamps={}
+                        # for name in self.camera_names:
+                        #     cur_files=list((sample_camera_path/name).glob('*.jpg'))
+                        #     cur_timestamps=precompute_timestamps(cur_files)
+                        #     camera_files[name]=cur_files
+                        #     camera_timestamps[name]=cur_timestamps
                         for name in self.camera_names:
-                            cur_files=list((sample_camera_path/name).glob('*.jpeg'))
-                            cur_timestamps=precompute_timestamps(cur_files)
-                            camera_files[name]=cur_files
-                            camera_timestamps[name]=cur_timestamps
+                            # 同时匹配 jpg 和 jpeg
+                            cur_files = list((sample_camera_path / name).glob('*.jpg')) \
+                                    + list((sample_camera_path / name).glob('*.jpeg'))
+
+                            cur_timestamps = precompute_timestamps(cur_files)
+                            camera_files[name] = cur_files
+                            camera_timestamps[name] = cur_timestamps
                         
                         localization_files=list((sample_localization_path).glob('*.json'))
                         localization_times=precompute_timestamps(localization_files)
