@@ -8,14 +8,14 @@ import torch
 import torch.distributed as dist
 import numpy as np
 from mmcv import Config
-from mmcv.runner import init_dist, get_dist_info, Hook, HOOKS,build_runner
+from mmcv.runner import init_dist, get_dist_info, Hook, build_runner
 from torchpack.environ import auto_set_run_dir, set_run_dir
 from torchpack.utils.config import configs
 from mmdet3d.apis import train_model
 from mmdet3d.datasets import build_dataset
 from mmdet3d.models import build_model
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
-import tools.hooks  # 确保工具模块被导入，类已注册到 HOOKS
+
 def auto_resume_checkpoint(run_dir):
     """在运行目录中查找最新 checkpoint（优先 latest.pth，其次 epoch_*.pth）"""
     if not os.path.isdir(run_dir):
@@ -39,18 +39,17 @@ def auto_resume_checkpoint(run_dir):
         dist.broadcast_object_list(ckpt_list, src=0)
     return ckpt_list[0]
 
-# @HOOKS.register_module()   # 关键：把类注册到 HOOKS
-# class UpdateLatestHook(Hook):
-#     """每训练完一个 epoch，就保存 latest.pth 更新到当前最新 checkpoint"""
-#     def __init__(self, save_dir=None):
-#         self.save_dir = save_dir
+class UpdateLatestHook(Hook):
+    """每训练完一个 epoch，就保存 latest.pth 更新到当前最新 checkpoint"""
+    def __init__(self, save_dir=None):
+        self.save_dir = save_dir
 
-#     def after_train_epoch(self, runner):
-#         out_dir = self.save_dir if self.save_dir else runner.work_dir
-#         # 保存 checkpoint，模板文件名带 epoch 序号
-#         ckpt_path = runner.save_checkpoint(out_dir=out_dir, filename_tmpl='epoch_{}.pth'.format(runner.epoch + 1))
-#         latest_path = os.path.join(out_dir, 'latest.pth')
-#         shutil.copyfile(ckpt_path, latest_path)
+    def after_train_epoch(self, runner):
+        out_dir = self.save_dir if self.save_dir else runner.work_dir
+        # 保存 checkpoint，模板文件名带 epoch 序号
+        ckpt_path = runner.save_checkpoint(out_dir=out_dir, filename_tmpl='epoch_{}.pth'.format(runner.epoch + 1))
+        latest_path = os.path.join(out_dir, 'latest.pth')
+        shutil.copyfile(ckpt_path, latest_path)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -127,25 +126,25 @@ def main():
         logger.info(f'Model:\n{model}')
 
     # Runner 构建前需从 cfg 获取 max_epochs
-    # max_epochs = cfg.get('max_epochs', None)
-    # if max_epochs is None and cfg.get('train_cfg', None):
-    #     max_epochs = cfg.train_cfg.get('max_epochs', None)
-    # if max_epochs is None:
-    #     raise ValueError("无法获取 max_epochs！请在配置文件中设置 max_epochs 或 train_cfg.max_epochs")
+    max_epochs = cfg.get('max_epochs', None)
+    if max_epochs is None and cfg.get('train_cfg', None):
+        max_epochs = cfg.train_cfg.get('max_epochs', None)
+    if max_epochs is None:
+        raise ValueError("无法获取 max_epochs！请在配置文件中设置 max_epochs 或 train_cfg.max_epochs")
 
-    # from mmcv.runner import build_runner
-    # optimizer = torch.optim.Adam(model.parameters(), lr=cfg.optimizer.lr) if hasattr(cfg, 'optimizer') else None
-    # runner = build_runner(
-    #     cfg.runner,
-    #     default_args=dict(
-    #         model=model,
-    #         optimizer=optimizer,
-    #         work_dir=run_dir,
-    #         logger=logger,
-    #         max_epochs=max_epochs
-    #     )
-    # )
-    # runner.register_hook(UpdateLatestHook(save_dir=run_dir))
+    from mmcv.runner import build_runner
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.optimizer.lr) if hasattr(cfg, 'optimizer') else None
+    runner = build_runner(
+        cfg.runner,
+        default_args=dict(
+            model=model,
+            optimizer=optimizer,
+            work_dir=run_dir,
+            logger=logger,
+            max_epochs=max_epochs
+        )
+    )
+    runner.register_hook(UpdateLatestHook(save_dir=run_dir))
 
     train_model(
         model,

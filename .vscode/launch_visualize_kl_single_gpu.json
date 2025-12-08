@@ -10,7 +10,7 @@
       "args": [
         "output/lidar_only_kl/configs.yaml",
         "--mode", "pred",
-        "--checkpoint", "output/lidar_only_kl/epoch_15.pth",
+        "--checkpoint", "output/lidar_only_kl/latest.pth",
         "--bbox-score", "0.2",
         "--out-dir", "vis_result/lidar_only_kl"
       ],

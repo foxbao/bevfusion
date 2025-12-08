@@ -1,9 +1,9 @@
-dataset_type: NuScenesDataset
-dataset_root: data/nuscenes/
+dataset_type: KLDataset
+dataset_root: data/kl/
 gt_paste_stop_epoch: -1
 reduce_beams: 32
-load_dim: 5
-use_dim: 5
+load_dim: 4
+use_dim: 4
 load_augmented: null
 
 point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
@@ -23,16 +23,21 @@ augment3d:
   translate: 0.5
 
 object_classes:
-  - car
-  - truck
-  - construction_vehicle
-  - bus
-  - trailer
-  - barrier
-  - motorcycle
-  - bicycle
-  - pedestrian
-  - traffic_cone
+  - Pedestrian
+  - Car
+  # - IGV-Full
+  - Truck
+  - Trailer-Empty
+  - Trailer-Full
+  - IGV-Empty
+  - Crane
+  # - OtherVehicle
+  - Cone
+  # - ContainerForklift
+  - Forklift
+  # - Lorry
+  # - ConstructionVehicle
+  - WheelCrane
 
 map_classes:
   - drivable_area
@@ -52,26 +57,71 @@ input_modality:
   use_map: false
   use_external: false
 
+# 啦啦啦
+custom_cfg:
+  POINT_FILTER: 
+    ENABLED: True
+    FILTER_MIN_POINTS_BY_CLASS:
+      Pedestrian: 5
+      Car: 50
+      # IGV-Full: 50
+      Truck: 50
+      Trailer-Empty: 50
+      Trailer-Full: 50
+      IGV-Empty: 50
+      Crane: 50
+      # OtherVehicle: 5
+      Cone: 5
+      # ContainerForklift: 10
+      Forklift: 10
+      # Lorry: 10
+      # ConstructionVehicle: 5
+      WheelCrane: 100
+  # eval_cfg:
+  #   class_range:
+  #     Pedestrian: 50
+  #     Car: 50
+  #     IGV-Full: 50
+  #     Truck: 50
+  #     Trailer-Empty: 50
+  #     Trailer-Full: 50
+  #     IGV-Empty: 50
+  #     Crane: 50
+  #     OtherVehicle: 50
+  #     Cone: 50
+  #     ContainerForklift: 50
+  #     Forklift: 50
+  #     Lorry: 50
+  #     ConstructionVehicle: 50
+  #     WheelCrane: 50
+  #   dist_fcn: "center_distance"
+  #   dist_ths: [0.5, 1.0, 2.0, 4.0]
+  #   dist_th_tp: 2.0
+  #   min_recall: 0.1
+  #   min_precision: 0.1
+  #   max_boxes_per_sample: 500
+  #   mean_ap_weight: 5
+
 train_pipeline:
   -
     type: LoadMultiViewImageFromFiles
     to_float32: true
   -
-    type: LoadPointsFromFile
+    type: LoadPointsFromMultipleFiles
     coord_type: LIDAR
     load_dim: ${load_dim}
     use_dim: ${use_dim}
     reduce_beams: ${reduce_beams}
     load_augmented: ${load_augmented}
-  -
-    type: LoadPointsFromMultiSweeps
-    sweeps_num: 9
-    load_dim: ${load_dim}
-    use_dim: ${use_dim}
-    reduce_beams: ${reduce_beams}
-    pad_empty_sweeps: true
-    remove_close: true
-    load_augmented: ${load_augmented}
+  # -
+  #   type: LoadPointsFromMultiSweeps
+  #   sweeps_num: 9
+  #   load_dim: ${load_dim}
+  #   use_dim: ${use_dim}
+  #   reduce_beams: ${reduce_beams}
+  #   pad_empty_sweeps: true
+  #   remove_close: true
+  #   load_augmented: ${load_augmented}
   -
     type: LoadAnnotations3D
     with_bbox_3d: true
@@ -82,33 +132,43 @@ train_pipeline:
     stop_epoch: ${gt_paste_stop_epoch}
     db_sampler:
       dataset_root: ${dataset_root}
-      info_path: ${dataset_root + "nuscenes_dbinfos_train.pkl"}
+      info_path: ${dataset_root + "kl_dbinfos_train.pkl"}
       rate: 1.0
       prepare: 
         filter_by_difficulty: [-1]
         filter_by_min_points:
-          car: 5
-          truck: 5
-          bus: 5
-          trailer: 5
-          construction_vehicle: 5
-          traffic_cone: 5
-          barrier: 5
-          motorcycle: 5
-          bicycle: 5
-          pedestrian: 5
+          Pedestrian: 5
+          Car: 50
+          # IGV-Full: 10
+          Truck: 50
+          Trailer-Empty: 50
+          Trailer-Full: 50
+          IGV-Empty: 50
+          Crane: 50
+          # OtherVehicle: 5
+          Cone: 5
+          # ContainerForklift: 5
+          Forklift: 5
+          # Lorry: 5
+          # ConstructionVehicle: 5
+          WheelCrane: 100
       classes: ${object_classes}
       sample_groups:
-        car: 2
-        truck: 3
-        construction_vehicle: 7
-        bus: 4
-        trailer: 6
-        barrier: 2
-        motorcycle: 6
-        bicycle: 6
-        pedestrian: 2
-        traffic_cone: 2
+        Pedestrian: 5
+        Car: 5
+        # IGV-Full: 5
+        Truck: 5
+        Trailer-Empty: 5
+        Trailer-Full: 5
+        IGV-Empty: 5
+        Crane: 5
+        # OtherVehicle: 5
+        Cone: 5
+        # ContainerForklift: 5
+        Forklift: 5
+        # Lorry: 5
+        # ConstructionVehicle: 5
+        WheelCrane: 5
       points_loader:
         type: LoadPointsFromFile
         coord_type: LIDAR
@@ -129,12 +189,6 @@ train_pipeline:
     rot_lim: ${augment3d.rotate}
     trans_lim: ${augment3d.translate}
     is_train: true
-  -
-    type: LoadBEVSegmentation
-    dataset_root: ${dataset_root}
-    xbound: [-50.0, 50.0, 0.5]
-    ybound: [-50.0, 50.0, 0.5]
-    classes: ${map_classes}
   -
     type: RandomFlip3D
   -
@@ -173,7 +227,7 @@ train_pipeline:
       - points
       - gt_bboxes_3d
       - gt_labels_3d
-      - gt_masks_bev
+      # - gt_masks_bev
     meta_keys:
       - camera_intrinsics
       - camera2ego
@@ -189,26 +243,18 @@ test_pipeline:
     type: LoadMultiViewImageFromFiles
     to_float32: true
   -
-    type: LoadPointsFromFile
+    type: LoadPointsFromMultipleFiles
     coord_type: LIDAR
     load_dim: ${load_dim}
     use_dim: ${use_dim}
     reduce_beams: ${reduce_beams}
     load_augmented: ${load_augmented}
   -
-    type: LoadPointsFromMultiSweeps
-    sweeps_num: 9
-    load_dim: ${load_dim}
-    use_dim: ${use_dim}
-    reduce_beams: ${reduce_beams}
-    pad_empty_sweeps: true
-    remove_close: true
-    load_augmented: ${load_augmented}
-  -
     type: LoadAnnotations3D
     with_bbox_3d: true
     with_label_3d: true
     with_attr_label: False
+
   -
     type: ImageAug3D
     final_dim: ${image_size}
@@ -217,18 +263,13 @@ test_pipeline:
     rot_lim: [0.0, 0.0]
     rand_flip: false
     is_train: false
+
   -
     type: GlobalRotScaleTrans
     resize_lim: [1.0, 1.0]
     rot_lim: [0.0, 0.0]
     trans_lim: 0.0
     is_train: false
-  -
-    type: LoadBEVSegmentation
-    dataset_root: ${dataset_root}
-    xbound: [-50.0, 50.0, 0.5]
-    ybound: [-50.0, 50.0, 0.5]
-    classes: ${map_classes}
   -
     type: PointsRangeFilter
     point_cloud_range: ${point_cloud_range}
@@ -246,7 +287,7 @@ test_pipeline:
       - points
       - gt_bboxes_3d
       - gt_labels_3d
-      - gt_masks_bev
+      # - gt_masks_bev
     meta_keys:
       - camera_intrinsics
       - camera2ego
@@ -258,43 +299,46 @@ test_pipeline:
       - lidar_aug_matrix
 
 data:
-  samples_per_gpu: 4
+  samples_per_gpu: 10
   workers_per_gpu: 4
   train:
     type: CBGSDataset
     dataset:
       type: ${dataset_type}
       dataset_root: ${dataset_root}
-      ann_file: ${dataset_root + "nuscenes_infos_train.pkl"}
+      ann_file: ${dataset_root + "kl_infos_train.pkl"}
       pipeline: ${train_pipeline}
       object_classes: ${object_classes}
       map_classes: ${map_classes}
       modality: ${input_modality}
       test_mode: false
-      use_valid_flag: true
+      use_valid_flag: false
       box_type_3d: LiDAR
+      custom_cfg: ${custom_cfg}
   val:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
-    ann_file: ${dataset_root + "nuscenes_infos_val.pkl"}
+    ann_file: ${dataset_root + "kl_infos_val.pkl"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}
     modality: ${input_modality}
     test_mode: false
     box_type_3d: LiDAR
+    custom_cfg: ${custom_cfg}
   test:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
-    ann_file: ${dataset_root + "nuscenes_infos_val.pkl"}
+    ann_file: ${dataset_root + "kl_infos_val.pkl"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}
     modality: ${input_modality}
     test_mode: true
     box_type_3d: LiDAR
+    custom_cfg: ${custom_cfg}
 
 evaluation:
-  interval: 1
+  interval: 10
   pipeline: ${test_pipeline}
  

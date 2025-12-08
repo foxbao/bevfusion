@@ -10,7 +10,7 @@
       "args": [
         "configs/kl/det/transfusion/secfpn/camera_lidar/resnet50/convfuser.yaml",
         "--run-dir",
-        "output/camera_lidar_resnet50/"
+        "output/camera_lidar_resnet50_kl/"
       ],
       "cwd": "${workspaceFolder}",
       "justMyCode": false,

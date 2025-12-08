@@ -15,7 +15,7 @@ from mmdet3d.apis import train_model
 from mmdet3d.datasets import build_dataset
 from mmdet3d.models import build_model
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
-
+import tools.hooks  # 确保工具模块被导入，类已注册到 HOOKS
 import sys
 # sys.argv = ['tools/train.py', 'configs/nuscenes/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml',
 #             '--run-dir', 'Res/test_mini'

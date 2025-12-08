@@ -5,7 +5,7 @@
       "name": "Debug BEVFusion (single GPU)",
       "type": "debugpy",
       "request": "launch",
-      "program": "tools/train.py",
+      "program": "tools/train_single_gpu.py",
       "console": "integratedTerminal",
       "args": [
         "configs/kl/det/transfusion/secfpn/lidar/voxelnet_0p075.yaml",

@@ -165,6 +165,14 @@ def fill_trainval_infos(kl:KL,train_samples,val_samples,test_samples):
                 intrinsice_data = json.load(f)
         else:
             intrinsice_data = {}
+            
+        # ---------- 读取 camera_extrinsics（若存在） ----------
+        cam_extr_path = sample.get('camera_extrinsics_path')
+        if cam_extr_path is not None and Path(cam_extr_path).exists():
+            with open(cam_extr_path, 'r', encoding='utf-8') as f:
+                camera_extrinsics_data = json.load(f)
+        else:
+            camera_extrinsics_data = {}
 
         # ---------- 读取 localization（若有） ----------
         loc_path = sample.get('localization')
@@ -191,6 +199,7 @@ def fill_trainval_infos(kl:KL,train_samples,val_samples,test_samples):
             'state':state,
             'sensor_extrinsics': extrinsice_data,
             'sensor_intrinsics': intrinsice_data,
+            'camera_extrinsics': camera_extrinsics_data,
             'label_path': sample['label'],
             "lidar2ego_translation": [0.0, 0.0, 0.0],
             "lidar2ego_rotation": [1.0, 0.0, 0.0, 0.0],
@@ -220,16 +229,44 @@ def fill_trainval_infos(kl:KL,train_samples,val_samples,test_samples):
             # if camera_type not in VALID_CAMERA_TYPES:
             #     continue  # 跳过无效相机
             camera_info = dict()
+            
+            key_camera_extrinsic = "Tx_baselink_camera_" + camera_type.replace("_image", "")
+            camera_extrinsic = camera_extrinsics_data[key_camera_extrinsic]
+            key_camera_intrinsic = "camera_"+camera_type.replace("_image", "")
+            camera_intrinsic= intrinsice_data[key_camera_intrinsic]
+            
+
+            # 解析 translation（np.array）
+            translation = np.array(camera_extrinsic[:3], dtype=np.float32)
+
+            # 解析 rotation（四元数 xyzw → numpy array）
+            # rotation = np.array(camera_extrinsic[3:], dtype=np.float32)  
+            # aaaa=camera_extrinsic[3:]
+            # print(aaaa)
+            rotation =Quaternion(np.array(camera_extrinsic[3:], dtype=np.float32)).rotation_matrix
+            # print(rotation)
+            # # rotation = [qx, qy, qz, qw]
+            # from scipy.spatial.transform import Rotation as R
+            
+            
+            # r = R.from_quat([np.array(camera_extrinsic[3:])])
+            # euler_deg = r.as_euler('xyz', degrees=True)   # 转成角度
+            # print(euler_deg)
             camera_info['data_path'] = data_path
-            camera_info["sensor2lidar_rotation"] = np.eye(3, dtype=np.float32)
-            camera_info["sensor2lidar_translation"] = np.array([0.5, 0.0, -1.5], dtype=np.float32)
+            # camera_info["sensor2lidar_rotation"] = np.eye(3, dtype=np.float32)
+            # camera_info["sensor2lidar_translation"] = np.array([0.5, 0.0, -1.5], dtype=np.float32)
 
             # 默认用全局 intrinsics，如果 sample 提供了，就覆盖
             camera_info["camera_intrinsics"] = intrinsice_data.get(
-                camera_type, DEFAULT_INTRINSICS
+                key_camera_intrinsic, DEFAULT_INTRINSICS
             )
-            camera_info["sensor2ego_rotation"] = [1.0, 0.0, 0.0, 0.0]
-            camera_info["sensor2ego_translation"] = np.array([1.5, 0.0, 1.2], dtype=np.float32)
+            
+            camera_info["sensor2lidar_rotation"] = rotation              # np.array([qx, qy, qz, qw])
+            camera_info["sensor2lidar_translation"] = translation        # np.array([x, y, z])
+            
+            camera_info["sensor2ego_rotation"] = np.array(camera_extrinsic[3:]) 
+            camera_info["sensor2ego_translation"] = translation
+            
             info["cams"].update({camera_type: camera_info})
 
         if sample['token'] in train_samples:

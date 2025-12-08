@@ -2,6 +2,8 @@ import os
 import time
 from .kl_utils import precompute_timestamps,match_multi_sensor_data,generate_token,match_sensor_data
 from pathlib import Path
+
+# 这个类在create_dataset的时候，用来建立pkl的内容
 class KL():
     #nusc = NuScenes(version=self.dataset_cfg.VERSION, dataroot=str(self.root_path), verbose=True)
     def __init__(self,
@@ -21,15 +23,25 @@ class KL():
             'bp_front_right':'bp_front_right',
             'bp_rear_left':'bp_rear_left',
             'bp_rear_right':'bp_rear_right'}
+        # self.camera_names={
+        #     # 'h100f1a_front_left':'h100f1a_front_left',
+        #     # 'h100f1a_rear_right':'h100f1a_rear_right',
+        #     'h120ua_front_left':'h120ua_front_left',
+        #     'h120ua_front_mid':'h120ua_front_mid',
+        #     'h120ua_front_right':'h120ua_front_right',
+        #     'h120ua_rear_left':'h120ua_rear_left',
+        #     'h120ua_rear_mid':'h120ua_rear_mid',
+        #     'h120ua_rear_right':'h120ua_rear_right',
+        # }
         self.camera_names={
             # 'h100f1a_front_left':'h100f1a_front_left',
             # 'h100f1a_rear_right':'h100f1a_rear_right',
-            'h120ua_front_left':'h120ua_front_left',
-            'h120ua_front_mid':'h120ua_front_mid',
-            'h120ua_front_right':'h120ua_front_right',
-            'h120ua_rear_left':'h120ua_rear_left',
-            'h120ua_rear_mid':'h120ua_rear_mid',
-            'h120ua_rear_right':'h120ua_rear_right',
+            'front_image':'front_image',
+            'left_front_image':'left_front_image',
+            'left_rear_image':'left_rear_image',
+            'rear_image':'rear_image',
+            'right_front_image':'right_front_image',
+            'right_rear_image':'right_rear_image',
         }
         self.samples=[]
         start_time = time.time()
@@ -57,7 +69,9 @@ class KL():
                     sample_localization_path=sample_s_path/scenario_dir/'localization'
                     sample_camera_path=sample_s_path/scenario_dir/'camera'
                     extrinsics_path = sample_s_path/scenario_dir/'extrinsics.json' if (sample_s_path/scenario_dir/'extrinsics.json').exists() else None
-                    intrinsics_path = sample_s_path/scenario_dir/'intrinsics.json' if (sample_s_path/scenario_dir/'intrinsics.json').exists() else None
+                    # intrinsics_path = sample_s_path/scenario_dir/'intrinsics.json' if (sample_s_path/scenario_dir/'intrinsics.json').exists() else None
+                    intrinsics_path = sample_s_path/'intrinsics.json' if (sample_s_path/'intrinsics.json').exists() else None
+                    camera_extrinsics_path=sample_s_path/'camera_extrinsics.json' if (sample_s_path/'camera_extrinsics.json').exists() else None
                     # 检查 label 下的场景目录label/s7/igv_1114_rain_01-century02是否存在，并且是一个目录
                     if os.path.isdir(label_scenario_path):
                         # 对于每个lidar目录，预先计算好时间，便于二分查找加速
@@ -109,6 +123,8 @@ class KL():
                                 sample['timestamp']=timestamp
                                 sample['extrinsics_path']=extrinsics_path
                                 sample['intrinsics_path']=intrinsics_path
+                                sample['camera_extrinsics_path']=camera_extrinsics_path
+                                
                                 self.samples.append(sample)
                                 # 构建对应的 bin 文件名
     

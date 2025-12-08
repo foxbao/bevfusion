@@ -31,21 +31,9 @@ model:
       test_cfg:
         grid_size: [1440, 1440, 41]
 
-optimizer:
-  type: AdamW
-  lr: 1.0e-4
-  weight_decay: 0.01
-
 lr_config:
   policy: CosineAnnealing
   warmup: linear
   warmup_iters: 500
   warmup_ratio: 0.33333333
   min_lr_ratio: 1.0e-3
-
-
-optimizer_config:
-  grad_clip:
-    max_norm: 15
-    norm_type: 2
-# find_unused_parameters: true

@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Create KL Data",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/create_data.py",
+      "args": [
+        "kl",
+        "--root-path", "./data/kl_8",
+        "--out-dir", "./data/kl_8",
+        "--extra-tag", "kl"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}

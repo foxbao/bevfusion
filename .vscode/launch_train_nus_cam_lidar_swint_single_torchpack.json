@@ -2,25 +2,25 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug visualize.py",
+      "name": "Debug BEVFusion (single GPU)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/tools/visualize_single_gpu.py",
+      "program": "tools/train.py",
       "console": "integratedTerminal",
       "args": [
-        "output/lidar_only_kl/configs.yaml",
-        "--mode", "pred",
-        "--checkpoint", "output/lidar_only_kl/epoch_15.pth",
-        "--bbox-score", "0.2",
-        "--out-dir", "vis_result/lidar_only_kl"
+        "configs/nuscenes/det/transfusion/secfpn/camera_lidar/swint_v0p075/convfuser.yaml",
+        "--run-dir",
+        "output/camera_lidar_swint_nus/"
       ],
+      "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "env": {
+        "CUDA_VISIBLE_DEVICES": "0" ,
         "MASTER_HOST": "127.0.0.1:29500",   // 注意加端口
         "MASTER_PORT": "29500",
         "WORLD_SIZE": "1",
         "RANK": "0",
-        "LOCAL_RANK": "0"
+        // "LOCAL_RANK": "0"
       }
     }
   ]
